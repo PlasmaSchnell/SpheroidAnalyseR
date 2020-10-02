@@ -43,7 +43,7 @@ ui <- navbarPage("SpheroidAnalyseR",
                      textInput("z_high","Robust z-score high limit",value = 1.96),
                      checkboxInput("pre_screen","Apply Pre-screen thresholds?",value = FALSE),
                      checkboxInput("override","Apply Manual overrides?",value = FALSE),
-                     conditionalPanel(condition ="input.override==1",
+                     conditionalPanel(condition ="input.pre_screen==1",
                      textInput("area_threshold_low","Area lower limit",value=1),
                      textInput("area_threshold_high","Area higher limit",value=1630000),
                      textInput("diam_threshold_low","Diameter lower limit",value=100),
@@ -55,12 +55,14 @@ ui <- navbarPage("SpheroidAnalyseR",
                      textInput("circ_threshold_low","Circularity lower limit",value=0.01),
                      textInput("circ_threshold_high","Circularity higher limit",value=1)
                      )
+                     ,conditionalPanel(condition="input.override==1",
+                                       selectInput("manual_outliers",label="Outliers to be removed",paste(LETTERS[1:8],1:12),multiple=TRUE,selectize=TRUE)
+                     )
                  ),
                  # Show a plot of the generated distribution
                  mainPanel(
-                     h2("Plate layout with identified outliers will appear here"),
-                     plotOutput("outlierPlot"),
-                     h2("Editable table of outliers")
+                     h2("Plate layout"),
+                     plotOutput("outlierPlot")
                  )
              ) 
     )
@@ -72,36 +74,105 @@ server <- function(input, output) {
 
     output$data_preview <- renderTable(
         {
-            file <- input$raw_data
-            if(!is.null(file)){
-                ext <- tools::file_ext(file$datapath)
-                req(file)
-                validate(need(ext == "xlsx","Please upload an xlsx file"))
-                head(readxl::read_xlsx(file$datapath),n=3)
-            }
+        data <- readRawData()
+        if(!is.null(data))
+            head(data, n=3)
         }
+
+    )
+    
+    readRawData <- reactive({
+        
+        file <- input$raw_data
+        if(!is.null(file)){
+            ext <- tools::file_ext(file$datapath)
+            req(file)
+            validate(need(ext == "xlsx","Please upload an xlsx file"))
+            data <- readxl::read_xlsx(file$datapath)
+        }
+
+    })
+    
+    readLayout <- reactive({
+        layout_file <- input$layout
+        
+        if(!is.null(layout_file)){
+            ext <- tools::file_ext(layout_file$datapath)
+            req(layout_file)
+            validate(need(ext == "csv","Please upload a layout in csv format"))
+            layout <- readr::read_csv(layout_file$datapath) %>% 
+                #layout <- readr::read_csv("layout_example.csv") %>% 
+                dplyr::rename("Row"=X1) %>% 
+                tidyr::pivot_longer(-Row,names_to="Col",
+                                    values_to="Index") %>% 
+                mutate(Index = as.factor(Index),Col=as.numeric(Col)) %>% 
+                filter(!is.na(Row)) 
+        }
+    }
+    )
+    
+    readTreatment <- reactive({
+        treat_file <- input$treat_data
+        ## TO DO: Need to check that 1st column is named Index
+        if(!is.null(treat_file)){
+            ext <- tools::file_ext(treat_file$datapath)
+            req(treat_file)
+            validate(need(ext == "csv","Please upload a layout in csv format"))
+            treatments <- readr::read_csv(treat_file$datapath) %>% 
+                mutate_all(as.factor)
+            treatments
+        }
+
+    }
     )
     
     output$show_layout <- renderPlot(
         {
-            layout_file <- input$layout
-            if(!is.null(layout_file)){
-                ext <- tools::file_ext(layout_file$datapath)
-                req(layout_file)
-                validate(need(ext == "csv","Please upload a layout in csv format"))
-                layout <- readr::read_csv(layout_file$datapath) %>% 
-                #layout <- readr::read_csv("layout_example.csv") %>% 
-                    dplyr::rename("Row"=X1) %>% 
-                    tidyr::pivot_longer(-Row,names_to="Col",
-                                        values_to="Index") %>% 
-                    mutate(Index = as.character(Index),Col=as.numeric(Col)) %>% 
-                    filter(!is.na(Row))
-             
-            ggplot(layout, aes(x = Row, y = Col, col = Index)) + geom_point(size=10) + scale_y_continuous(breaks=1:12)     
+            layout <- readLayout()
+            treatments <- readTreatment()
+            
+            if(!is.null(layout)){ 
+                if(!is.null(treatments)){
+                    layout <- left_join(layout,treatments) %>% 
+                        tidyr::pivot_longer(Index:last_col(), names_to="Factor",values_to="Label")
+                    ggplot(layout, aes(x = Row, y = Col, fill = Label)) + geom_tile() + scale_y_continuous(breaks=1:12) + facet_wrap(~Factor,ncol=1
+                                                                                                                                            )
+                } else{
+            layout <- mutate(layout, Cell = ifelse(!is.na(Index), paste(Row,Col),""))
+            ggplot(layout, aes(x = Row, y = Col, fill = Index,label=Cell)) + geom_tile() + geom_text() + scale_y_continuous(breaks=1:12)
+                }
             }
         }
             
     )
+    
+    detectOutliers <- function(layout){
+        
+        rand_outliers <- sample(1:nrow(layout),5)
+        rand_outliers <- ifelse(1:nrow(layout) %in% rand_outliers, "X","")
+        layout %>% mutate(Outlier = rand_outliers,Outlier = ifelse(is.na(Index),NA,Outlier))
+    }
+    
+    output$outlierPlot <- renderPlot(
+    ### a dummy function for now that will just show some randomly selected outliers    
+    {
+            
+        rawData <- readRawData()
+        layout <- readLayout()
+        
+        if(!is.null(rawData) & !is.null(layout)){
+            
+            layout <- detectOutliers(layout) %>% 
+                mutate(Cell = ifelse(Outlier=="X",paste(Row,Col),""))
+            ## detectOutliers will add an extra column Outlier indicating if cell is an outlier
+            ggplot(layout, aes(x = Row, y = Col, fill = Outlier,label=Cell)) + geom_tile() + scale_y_continuous(breaks=1:12) + scale_fill_manual(values=c("white","red","grey")) + geom_text()
+            
+        
+        }
+            
+        }
+    )
+    
 }
 
 # Run the application 
