@@ -1,0 +1,7 @@
+Index,Treatment.Label,Time_Date ,Cell_line,Passage_No,Radiation_dosage,Drug_1,Conc_1
+1,GBM58-0mM taurine,08/11/2019 10:28,GBM58,1,0,Taurine,0
+2,GBM58-10mM taurine,08/11/2019 10:28,GBM58,1,0,Taurine,10
+3,GBM63-0mM taurine,08/11/2019 10:28,GBM63,1,0,Taurine,0
+4,GBM63-10mM taurine,08/11/2019 10:28,GBM63,1,0,Taurine,10
+5,A172-0mM taurine,08/11/2019 10:28,A172,1,0,Taurine,0
+6,A172-10mM taurine,08/11/2019 10:28,A172,1,0,Taurine,10
