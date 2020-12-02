@@ -109,18 +109,26 @@ draw_outlier_plot = function(df, value){
   ggplot(df, aes(x = Row, y = Col, fill = is_Outlier,label=Well.Name)) +
     geom_tile() + 
     scale_y_continuous(breaks=1:12) + 
-    scale_fill_manual(values=colours) + geom_text()
+    scale_fill_manual(values=colours, drop=FALSE) + geom_text()
 }
 
 
 draw_z_score_outlier_plot = function(df, value){
   value= paste0(value,"_status")
+  
+  # levels(df[,value]) = c("1", "0", "NA")
+  # colours = c("1" = "red", "0" = "white", "NA"='grey')
+  
+  df[,value] = factor(df[,value])
+  levels(df[,value]) = c(1,0,as.integer(NA))
   colours = c("1" = "red", "0" = "white", "NA"='grey')
+  # colours = c(1 = "red", 0 = "white", NA='grey')
+  
   
   ggplot(df, aes_string(x = "Row", y = "Col", fill = value,label="Well.Name")) +
     geom_tile() + 
     scale_y_continuous(breaks=1:12) + 
-    scale_fill_manual(values=colours) + geom_text()
+    scale_fill_manual(values=colours, drop=FALSE) + geom_text()
 }
 
 
@@ -633,10 +641,12 @@ gen_report = function(Sph_Treat_Robz_ADVPC,
 }
 
 
+manual_outlier_selections = outer(LETTERS[1:8], 1:12, FUN = "paste")
+dim(manual_outlier_selections) =NULL
 # Define UI for application that draws a histogram
 ui <- navbarPage("SpheroidAnalyseR",
 
-    # Application title
+      # Application title
     tabPanel("Data Input",
 
     # Sidebar with a slider input for number of bins 
@@ -680,10 +690,25 @@ ui <- navbarPage("SpheroidAnalyseR",
                         numericInput("circ_threshold_low","Circularity lower limit",value=0.01,min=0),
                        numericInput("circ_threshold_high","Circularity higher limit",value=1,min=0)
                      )
-                     ,conditionalPanel(condition="input.override==1",
-                                       selectInput("manual_outliers",label="Outliers to be removed",
-                                                   paste(LETTERS[1:8],1:12),
-                                                   multiple=TRUE,selectize=TRUE)
+                     ,
+                     #
+                     conditionalPanel(condition="input.override==1",
+                                       selectInput("area_manual_outliers",label="Area Outliers to be removed",
+                                                   manual_outlier_selections,
+                                                   multiple=TRUE,selectize=TRUE),
+                                      
+                                      selectInput("diameter_manual_outliers",label="Diameter Outliers to be removed",
+                                                  manual_outlier_selections,
+                                                  multiple=TRUE,selectize=TRUE),
+                                      selectInput("volume_manual_outliers",label="Volume Outliers to be removed",
+                                                  manual_outlier_selections,
+                                                  multiple=TRUE,selectize=TRUE),
+                                      selectInput("perimeter_manual_outliers",label="Perimeter Outliers to be removed",
+                                                  manual_outlier_selections,
+                                                  multiple=TRUE,selectize=TRUE),
+                                      selectInput("circularity_manual_outliers",label="Circularity Outliers to be removed",
+                                                  manual_outlier_selections,
+                                                  multiple=TRUE,selectize=TRUE)
                      )
                      ,
                      actionButton("outlier_btn", "Remove outliers"),
@@ -693,7 +718,7 @@ ui <- navbarPage("SpheroidAnalyseR",
                  # Show a plot of the generated distribution
                  mainPanel(
                     
-                     h2("Plate layout after pre-sreen and manual outlier removal (if applied)"),
+                     h2("Plate layout after pre-sreen outlier removal (if applied)"),
                   
                      selectInput("select_outlier_values",label="Choose the value to view outliers",
                                  list("Area", "Diameter", "Volume", "Perimeter" , "Circularity")),
