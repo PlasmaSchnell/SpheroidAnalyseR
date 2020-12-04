@@ -15,7 +15,8 @@ library(openxlsx)
 library(plotrix)
 library(writexl)
 library(ggpubr)
-
+library(shiny)
+library(shinyjs)
 #######Predefine functions ######
 
 
@@ -194,40 +195,101 @@ gen_report = function(Sph_Treat_Robz_ADVPC,
   addWorksheet(wb, "Summary", gridLines = FALSE)
   addWorksheet(wb, "All plots", gridLines = FALSE)
   
-  ### writing area plots  ###
-  suppressMessages(print(p_Area_new))
-  insertPlot(wb, 1, xy = c("A", 1), width = 9, height = 3.5,  fileType = "png", units = "in")
-  
-  suppressMessages(print(p_Area_dotplot_new))
-  insertPlot(wb, 1, xy = c("A", 19), width = 9, height = 3.5,  fileType = "png", units = "in")
-  
-  ### writing diameter plots  ###
-  suppressMessages(print(p_Diameter_new))
-  insertPlot(wb, 2, xy = c("A", 1), width = 9, height = 3.5,  fileType = "png", units = "in")
-  
-  suppressMessages(print(p_Diameter_dotplot_new))
-  insertPlot(wb, 2, xy = c("A", 19), width = 9, height = 3.5,  fileType = "png", units = "in")
 
-  ###### write Circularity plots
-  suppressMessages(print(p_Circularity_new))
-  insertPlot(wb, 3, xy = c("A", 1), width = 9, height = 3.5,  fileType = "png", units = "in")
+  ### writing area plots  ###
+  png("p11.png",width = 1024, height = 400, res=150)
+  print(p_Area_new) 
+  dev.off()
+  insertImage(wb, 1, "p11.png", width = 9, height = 3.5 , startRow = 1,startCol = 'A')
+
   
-  suppressMessages(print(p_Circularity_dotplot_new))
-  insertPlot(wb, 3, xy = c("A", 19), width = 9, height = 3.5,  fileType = "png", units = "in")
+  png("p12.png",width = 1024, height = 400, res=150)
+  print(p_Area_new)
+  dev.off()
+  insertImage(wb, 1, "p12.png", width = 9, height = 3.5,startRow = 19,startCol = 'A')
+  ### writing diameter plots  ###
+  png("p21.png",width = 1024, height = 400, res=150)
+  print(p_Diameter_new) 
+  dev.off()
+  insertImage(wb, 2, "p21.png", width = 9, height = 3.5 , startRow = 1,startCol = 'A')
+  
+  
+  png("p22.png",width = 1024, height = 400, res=150)
+  print(p_Diameter_dotplot_new)
+  dev.off()
+  insertImage(wb, 2, "p22.png", width = 9, height = 3.5,startRow = 19,startCol = 'A')
+  
+  ###### write Circularity plots
+  png("p31.png",width = 1024, height = 400, res=150)
+  print(p_Circularity_new) 
+  dev.off()
+  insertImage(wb, 3, "p31.png", width = 9, height = 3.5 , startRow = 1,startCol = 'A')
+  
+  
+  png("p32.png",width = 1024, height = 400, res=150)
+  print(p_Circularity_dotplot_new)
+  dev.off()
+  insertImage(wb, 3, "p32.png", width = 9, height = 3.5,startRow = 19,startCol = 'A')
   
   ###### write Volume plots
-  suppressMessages(print(p_Volume_new))
-  insertPlot(wb, 4, xy = c("A", 1), width = 9, height = 3.5,  fileType = "png", units = "in")
+  png("p41.png",width = 1024, height = 400, res=150)
+  print(p_Volume_new) 
+  dev.off()
+  insertImage(wb, 4, "p41.png", width = 9, height = 3.5 , startRow = 1,startCol = 'A')
   
-  suppressMessages(print(p_Volume_dotplot_new))
-  insertPlot(wb, 4, xy = c("A", 19), width = 9, height = 3.5,  fileType = "png", units = "in")
+  
+  png("p42.png",width = 1024, height = 400, res=150)
+  print(p_Volume_dotplot_new)
+  dev.off()
+  insertImage(wb, 4, "p42.png", width = 9, height = 3.5,startRow = 19,startCol = 'A')
   
   ###### write Perimeter plots
-  suppressMessages(print(p_Perimeter_new))
-  insertPlot(wb, 5, xy = c("A", 1), width = 9, height = 3.5,  fileType = "png", units = "in")
+  png("p51.png",width = 1024, height = 400, res=150)
+  print(p_Perimeter_new) 
+  dev.off()
+  insertImage(wb, 5, "p51.png", width = 9, height = 3.5 , startRow = 1,startCol = 'A')
   
-  suppressMessages(print(p_Perimeter_dotplot_new))
-  insertPlot(wb, 5, xy = c("A", 19), width = 9, height = 3.5,  fileType = "png", units = "in")
+  
+  png("p52.png",width = 1024, height = 400, res=150)
+  print(p_Perimeter_dotplot_new)
+  dev.off()
+  insertImage(wb, 5, "p52.png", width = 9, height = 3.5,startRow = 19,startCol = 'A')
+  
+  unlink(c("p11", "p12", "p21", "p22","p31", "p32","p41", "p42","p51", "p52"))
+  
+  # suppressMessages(print(p_Area_new))
+  # insertPlot(wb, 1, xy = c("A", 1), width = 9, height = 3.5,  fileType = "png", units = "in")
+  # 
+  # suppressMessages(print(p_Area_dotplot_new))
+  # insertPlot(wb, 1, xy = c("A", 19), width = 9, height = 3.5,  fileType = "png", units = "in")
+  
+  # ### writing diameter plots  ###
+  # suppressMessages(print(p_Diameter_new))
+  # insertPlot(wb, 2, xy = c("A", 1), width = 9, height = 3.5,  fileType = "png", units = "in")
+  # 
+  # suppressMessages(print(p_Diameter_dotplot_new))
+  # insertPlot(wb, 2, xy = c("A", 19), width = 9, height = 3.5,  fileType = "png", units = "in")
+
+  # ###### write Circularity plots
+  # suppressMessages(print(p_Circularity_new))
+  # insertPlot(wb, 3, xy = c("A", 1), width = 9, height = 3.5,  fileType = "png", units = "in")
+  # 
+  # suppressMessages(print(p_Circularity_dotplot_new))
+  # insertPlot(wb, 3, xy = c("A", 19), width = 9, height = 3.5,  fileType = "png", units = "in")
+  # 
+  # ###### write Volume plots
+  # suppressMessages(print(p_Volume_new))
+  # insertPlot(wb, 4, xy = c("A", 1), width = 9, height = 3.5,  fileType = "png", units = "in")
+  # 
+  # suppressMessages(print(p_Volume_dotplot_new))
+  # insertPlot(wb, 4, xy = c("A", 19), width = 9, height = 3.5,  fileType = "png", units = "in")
+  # 
+  # ###### write Perimeter plots
+  # suppressMessages(print(p_Perimeter_new))
+  # insertPlot(wb, 5, xy = c("A", 1), width = 9, height = 3.5,  fileType = "png", units = "in")
+  # 
+  # suppressMessages(print(p_Perimeter_dotplot_new))
+  # insertPlot(wb, 5, xy = c("A", 19), width = 9, height = 3.5,  fileType = "png", units = "in")
   
   
 
@@ -645,7 +707,7 @@ manual_outlier_selections = outer(LETTERS[1:8], 1:12, FUN = "paste")
 dim(manual_outlier_selections) =NULL
 # Define UI for application that draws a histogram
 ui <- navbarPage("SpheroidAnalyseR",
-
+                             
       # Application title
     tabPanel("Data Input",
 
@@ -673,8 +735,8 @@ ui <- navbarPage("SpheroidAnalyseR",
     tabPanel("Outliers",
              sidebarLayout(
                  sidebarPanel(
-                     textInput("z_low","Robust z-score low limit",value = -1.96),
-                     textInput("z_high","Robust z-score high limit",value = 1.96),
+                     numericInput("z_low","Robust z-score low limit",value = -1.96, step=0.01),
+                     numericInput("z_high","Robust z-score high limit",value = 1.96, step=0.01),
                      checkboxInput("pre_screen","Apply Pre-screen thresholds?",value = TRUE),
                      checkboxInput("override","Apply Manual overrides?",value = FALSE),
                      conditionalPanel(condition ="input.pre_screen==1",
@@ -717,7 +779,7 @@ ui <- navbarPage("SpheroidAnalyseR",
                  ),
                  # Show a plot of the generated distribution
                  mainPanel(
-                    
+                    useShinyjs(), 
                      h2("Plate layout after pre-sreen outlier removal (if applied)"),
                   
                      selectInput("select_outlier_values",label="Choose the value to view outliers",
@@ -921,9 +983,11 @@ server <- function(input, output,session) {
     
    
     output_report <- eventReactive(input$outlier_btn, {
-
-      
       validate(
+     
+        need(is.numeric(input$z_low), "Please check if the low limit of the Z score is numeric"),
+        need(is.numeric(input$z_high), "Please check if the high limit of the Z score is numeric"),
+        
         need(is.numeric(input$area_threshold_low) & input$area_threshold_low>0, "Please input a positive area threshold (numeric)"),
         need(is.numeric(input$area_threshold_high) & input$area_threshold_high>0, "Please input a positive area threshold (numeric)"),
         
@@ -1290,9 +1354,8 @@ server <- function(input, output,session) {
 
       output$outlierPlot <- renderPlot({
         validate(need(df_output,"Please run the outlier removal"))
-          message(df_output)
-          df_outlier_temp = df_output
-          draw_outlier_plot(df_outlier_temp,input$select_outlier_values)
+        df_outlier_temp = df_output
+        draw_outlier_plot(df_outlier_temp,input$select_outlier_values)
       })
       
       
@@ -1324,7 +1387,23 @@ server <- function(input, output,session) {
         
       })
       
+      
+      observeEvent(input$pre_screen,{
+        message(input$pre_screen)
+        if(input$pre_screen==TRUE){
+          show("outlierPlot")
+          show("select_outlier_values")
+        }else{
+          hide("outlierPlot")
+          hide("select_outlier_values")
+        }
+      })
  
+      # toggleView <- function(input, output_name){
+      #   observeEvent(input$, {show(output_name)})
+      #   observeEvent(input$hide, {hide(output_name)})
+      # }
+      
     ### Download report
     output$downloadData_btn <- downloadHandler(
 
