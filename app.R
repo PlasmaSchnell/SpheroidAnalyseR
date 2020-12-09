@@ -19,7 +19,11 @@ library(shiny)
 library(shinyjs)
 #######Predefine functions ######
 
-
+cbind.fill <- function(...) {                                                                                                                                                       
+  transpoted <- lapply(list(...),t)                                                                                                                                                 
+  transpoted_dataframe <- lapply(transpoted, as.data.frame)                                                                                                                         
+  return (data.frame(t(rbind.fill(transpoted_dataframe))))                                                                                                                          
+} 
 #####  helper function for Means and SE's
 data_summary <- function(data, varname, groupnames){
   require(plyr)
@@ -53,6 +57,27 @@ data_summary_TI <- function(data, varname, groupnames){
   return(data_sum)
   
 }
+
+update_df_OR_by_status<- function(df){
+  ### create Area, Diameter etc columns with oUtliers removed eg (Area_OR), both via RobZ and Manual Override
+  df$Area_OR <- ifelse(df$Area_status=='0', df$Area, NA)
+  df <- df[with(df, order(Row, Col)),]
+  
+  df$Diameter_OR <- ifelse(df$Diameter_status=='0', df$Diameter, NA)
+  df <- df[with(df, order(Row, Col)),]
+  
+  df$Circularity_OR <- ifelse(df$Circularity_status=='0', df$Circularity, NA)
+  df <- df[with(df, order(Row, Col)),]
+  
+  df$Volume_OR <- ifelse(df$Volume_status=='0', df$Volume, NA)
+  df <- df[with(df, order(Row, Col)),]
+  
+  df$Perimeter_OR <- ifelse(df$Perimeter_status=='0', df$Perimeter, NA)
+  df <- df[with(df, order(Row, Col)),]
+  
+  return(df)
+}
+
 
 ##### function calculating outliers
 cal_z_score = function(df_sph_treat, df_prev, varname, RobZ_LoLim, RobZ_UpLim){
@@ -122,7 +147,7 @@ draw_z_score_outlier_plot = function(df, value){
   
   df[,value] = factor(df[,value])
   levels(df[,value]) = c(1,0,as.integer(NA))
-  colours = c("1" = "red", "0" = "white", "NA"='grey')
+  colours = c("1" = "white", "0" = "red", "NA"='grey')
   # colours = c(1 = "red", 0 = "white", NA='grey')
   
   
@@ -133,16 +158,76 @@ draw_z_score_outlier_plot = function(df, value){
 }
 
 
+draw_plot_1 = function(df, value){
+  #- ploting config
+  AreaPointcolour <- "black"
+  PerimeterPointcolour <- "black"
+  CircularityPointcolour <- "black"
+  CircularityPointcolour <- "black"
+  VolumePointcolour <- "black"
+  OutlierPointcolour <- "red"
+  Pointsize <- 1.5
+  OutlierPointSize  <- 1.5
+  
+  cols <- c("1" = "red", "0" = "black")
+  #cols <- c("Outlier" = "red", "Normal" = "black")
+  
+  ######### Area PLots
+  y_value = value
+  colour_value = paste0(value,"_status")
+  
+  ggplot()  + geom_point(data = df, aes_string(x= "Col", y=y_value, colour = colour_value), size = Pointsize,  show.legend=FALSE ) + 
+    scale_x_continuous(limits=c(0,12),breaks = c(0,6,12))+
+    facet_wrap(~ df$T_I, nrow=1) +
+    ylab(y_value)+xlab('Column') +  labs(title= paste0(y_value, " data by Treatment Index with outliers in red")) +
+    theme_bw() + 
+    theme(plot.title = element_text(size = 10))+ 
+    scale_colour_manual(values = cols) 
+}
+
+
+draw_plot_2 = function(df, value){
+  #- ploting config
+  AreaPointcolour <- "black"
+  PerimeterPointcolour <- "black"
+  CircularityPointcolour <- "black"
+  CircularityPointcolour <- "black"
+  VolumePointcolour <- "black"
+  OutlierPointcolour <- "red"
+  Pointsize <- 1.5
+  OutlierPointSize  <- 1.5
+  
+  cols <- c("1" = "red", "0" = "black")
+  #cols <- c("Outlier" = "red", "Normal" = "black")
+  
+  ######### Area PLots
+  y_value = paste0(value, '_OR')
+
+  
+  ggerrorplot(df, x= "T_I", y=y_value, desc_stat ="mean_se", 
+              add = "dotplot", error.plot="errorbar", 
+              addparams= list(color="black", shape=21, binaxis="y", binwidth=2000, stackdir = "center", fill= "darkgray"))  + 
+    stat_summary(fun.y = mean, fun.ymin = mean, fun.ymax = mean,
+                                                                                                                                                                                                                                                                       geom = "crossbar", width = 0.25)  + 
+    ylab(value) +
+    xlab('Treatment Index') + 
+    labs(title= paste0(value,"  : Mean +/- SE  (outliers removed)")) + theme_bw() +
+    theme(plot.title = element_text(size = 10))
+  
+  
+}
+
 ##### function for generating the report
 
 gen_report = function(Sph_Treat_Robz_ADVPC,
                       df_treat,df_setup,
                       Spheroid_data,
-                      p_Area_new,p_Area_dotplot_new,
-                      p_Diameter_new ,p_Diameter_dotplot_new,
-                      p_Circularity_new,p_Circularity_dotplot_new,
-                      p_Volume_new, p_Volume_dotplot_new,
-                      p_Perimeter_new, p_Perimeter_dotplot_new,
+                      df_origin,
+                      # p_Area_new,p_Area_dotplot_new,
+                      # p_Diameter_new ,p_Diameter_dotplot_new,
+                      # p_Circularity_new,p_Circularity_dotplot_new,
+                      # p_Volume_new, p_Volume_dotplot_new,
+                      # p_Perimeter_new, p_Perimeter_dotplot_new,
                       rawfilename,platesetupname,
                       RobZ_LoLim,RobZ_UpLim,
                       TF_apply_thresholds,
@@ -155,9 +240,105 @@ gen_report = function(Sph_Treat_Robz_ADVPC,
                       TF_copytomergedir= FALSE
                       ){
 
+  ######################################################################
+  ###########  START REPORT / PLOTTING 
+  ######################################################################
   
   Sph_Treat_Robz_ADVPC$T_I <- as.numeric(Sph_Treat_Robz_ADVPC$T_I)
   Sph_Treat_ADVPC <- Sph_Treat_Robz_ADVPC[with(Sph_Treat_Robz_ADVPC, order(T_I)),]
+  
+  #- ploting config
+  AreaPointcolour <- "black"
+  PerimeterPointcolour <- "black"
+  CircularityPointcolour <- "black"
+  CircularityPointcolour <- "black"
+  VolumePointcolour <- "black"
+  OutlierPointcolour <- "red"
+  Pointsize <- 1.5
+  OutlierPointSize  <- 1.5
+  
+  Arealabel = expression("Area" ~ (mu~m^{2} ))
+  Diameterlabel = expression("Diameter" ~ (mu~m ))
+  Volumelabel = expression("Volume" ~ (mu~m^{3} ))
+  Perimeterlabel = expression("Perimeter" ~ (mu~m ))
+  
+  
+  cols <- c("1" = "red", "0" = "black")
+  #cols <- c("Outlier" = "red", "Normal" = "black")
+  
+  ######### Area PLots
+  
+  p_Area_new <- ggplot()  + geom_point(data = Sph_Treat_ADVPC, aes(x= Col, y=Area, colour = Area_status), size = Pointsize,  show.legend=FALSE ) + 
+    scale_x_continuous(limits=c(0,12),breaks = c(0,6,12))+
+    facet_wrap(~Sph_Treat_ADVPC$T_I, nrow=1) +
+    ylab(Arealabel)+xlab('Column') +  labs(title= " Area data by Treatment Index with outliers in red") + 
+    theme_bw() + theme(plot.title = element_text(size = 10))+ 
+    scale_colour_manual(values = cols) 
+  
+  
+  p_Area_dotplot_new <- ggerrorplot(Sph_Treat_ADVPC, x= "T_I", y="Area_OR", desc_stat ="mean_se", add = "dotplot", error.plot="errorbar", addparams= list(color="black", shape=21, binaxis="y", binwidth=2000, stackdir = "center", fill= "darkgray"))  + stat_summary(fun.y = mean, fun.ymin = mean, fun.ymax = mean,
+                                                                                                                                                                                                                                                                       geom = "crossbar", width = 0.25)  + 
+    ylab(Arealabel) +xlab('Treatment Index') +  labs(title= "Area  : Mean +/- SE  (outliers removed)") +
+    theme_bw() + theme(plot.title = element_text(size = 10))
+  
+  
+  
+  ########################### Diameter PLots
+  p_Diameter_new <- ggplot()  + geom_point(data = Sph_Treat_ADVPC, aes(x= Col, y=Diameter, colour = Diameter_status), size = Pointsize,  show.legend=FALSE ) + 
+    # geom_point(data = Sph_Data_Out, aes(x= Col, y=Diameter_OO) , size = OutlierPointSize, colour = OutlierPointcolour ) +ylab(' Diameter  (um^2)')   xlab('Column') +
+    scale_x_continuous(limits=c(0,12),breaks = c(0,6,12))+
+    facet_wrap(~Sph_Treat_ADVPC$T_I, nrow=1) +
+    #   ylab(Arealabel) +xlab('Column') +  labs(title= " Area data by Treatment Index with outliers in red") + theme_bw() + theme(plot.title = element_text(size = 10))
+    ylab(Diameterlabel)+xlab('Column') +  labs(title= " Diameter data by Treatment Index with outliers in red") +
+    theme_bw() + theme(plot.title = element_text(size = 10))+ 
+    scale_colour_manual(values = cols) 
+  
+  p_Diameter_dotplot_new <- ggerrorplot(Sph_Treat_ADVPC, x= "T_I", y="Diameter_OR", desc_stat ="mean_se", add = "dotplot", error.plot="errorbar", addparams= list(color="black", shape=21, binaxis="y", binwidth=2000, stackdir = "center", fill= "darkgray"))  + stat_summary(fun.y = mean, fun.ymin = mean, fun.ymax = mean,
+                                                                                                                                                                                                                                                                               geom = "crossbar", width = 0.25)  + 
+    ylab(Diameterlabel) +xlab('Treatment Index') +  labs(title= "Diameter  : Mean +/- SE  (outliers removed)") + theme_bw() + theme(plot.title = element_text(size = 10))
+  
+  
+  ########################### Circularity PLots
+  
+  p_Circularity_new <- ggplot()  + geom_point(data = Sph_Treat_ADVPC, aes(x= Col, y=Circularity, colour = Circularity_status), size = Pointsize,  show.legend=FALSE ) + 
+    scale_x_continuous(limits=c(0,12),breaks = c(0,6,12))+
+    
+    facet_wrap(~Sph_Treat_ADVPC$T_I, nrow=1) +
+    ylab('Circularity')+xlab('Column') +  labs(title= " Circularity data by Treatment Index with outliers in red") + theme_bw() + theme(plot.title = element_text(size = 10))+ 
+    scale_colour_manual(values = cols) 
+  
+  p_Circularity_dotplot_new <- ggerrorplot(Sph_Treat_ADVPC, x= "T_I", y="Circularity_OR", desc_stat ="mean_se", add = "dotplot", error.plot="errorbar", addparams= list(color="black", shape=21, binaxis="y", binwidth=2000, stackdir = "center", fill= "darkgray"))  + stat_summary(fun.y = mean, fun.ymin = mean, fun.ymax = mean,
+                                                                                                                                                                                                                                                                                     geom = "crossbar", width = 0.25)  + 
+    ylab('Circularity') +xlab('Treatment Index') +  labs(title= "Circularity  : Mean +/- SE  (outliers removed)") + theme_bw() + theme(plot.title = element_text(size = 10))
+  
+  ########################### Volume PLots
+  
+  p_Volume_new <- ggplot()  + geom_point(data = Sph_Treat_ADVPC, aes(x= Col, y=Volume, colour = Volume_status), size = Pointsize,  show.legend=FALSE ) + 
+    scale_x_continuous(limits=c(0,12),breaks = c(0,6,12))+
+    
+    facet_wrap(~Sph_Treat_ADVPC$T_I, nrow=1) +
+    ylab(Volumelabel)+xlab('Column') +  labs(title= " Volume data by Treatment Index with outliers in red") + theme_bw() + theme(plot.title = element_text(size = 10))+ 
+    scale_colour_manual(values = cols) 
+  
+  
+  p_Volume_dotplot_new <- ggerrorplot(Sph_Treat_ADVPC, x= "T_I", y="Volume_OR", desc_stat ="mean_se", add = "dotplot", error.plot="errorbar", addparams= list(color="black", shape=21, binaxis="y", binwidth=2000, stackdir = "center", fill= "darkgray"))  + stat_summary(fun.y = mean, fun.ymin = mean, fun.ymax = mean,
+                                                                                                                                                                                                                                                                           geom = "crossbar", width = 0.25)  + 
+    ylab(Volumelabel) +xlab('Treatment Index') +  labs(title= "Volume  : Mean +/- SE  (outliers removed)") + theme_bw() + theme(plot.title = element_text(size = 10))
+  
+  ########################### Perimeter PLots
+  
+  p_Perimeter_new <- ggplot()  + geom_point(data = Sph_Treat_ADVPC, aes(x= Col, y=Perimeter, colour = Perimeter_status), size = Pointsize,  show.legend=FALSE ) + 
+    scale_x_continuous(limits=c(0,12),breaks = c(0,6,12))+
+    
+    facet_wrap(~Sph_Treat_ADVPC$T_I, nrow=1) +
+    ylab(Perimeterlabel)+xlab('Column') +  labs(title= " Perimeter data by Treatment Index with outliers in red") + theme_bw() + theme(plot.title = element_text(size = 10))+ 
+    scale_colour_manual(values = cols) 
+  
+  p_Perimeter_dotplot_new <- ggerrorplot(Sph_Treat_ADVPC, x= "T_I", y="Perimeter_OR", desc_stat ="mean_se", add = "dotplot", error.plot="errorbar", addparams= list(color="black", shape=21, binaxis="y", binwidth=2000, stackdir = "center", fill= "darkgray")) + 
+    stat_summary(fun.y = mean, fun.ymin = mean, fun.ymax = mean,geom = "crossbar", width = 0.25)  + 
+    ylab(Perimeterlabel) +xlab('Treatment Index') +  labs(title= "Perimeter  : Mean +/- SE  (outliers removed)") + theme_bw() + theme(plot.title = element_text(size = 10))
+  
+  
   
   #subset data for outlier override table()... dfA = dataframe Area, dfD = Diameter etc...
   ### dfA####
@@ -204,7 +385,7 @@ gen_report = function(Sph_Treat_Robz_ADVPC,
 
   
   png("p12.png",width = 1024, height = 400, res=150)
-  print(p_Area_new)
+  print(p_Area_dotplot_new)
   dev.off()
   insertImage(wb, 1, "p12.png", width = 9, height = 3.5,startRow = 19,startCol = 'A')
   ### writing diameter plots  ###
@@ -532,7 +713,7 @@ gen_report = function(Sph_Treat_Robz_ADVPC,
   }
   
   
-
+  
   ###########end of write CSV Export file#########################
 
   ### start write Mean/SE  CSV data to report at tab 12
@@ -649,24 +830,40 @@ gen_report = function(Sph_Treat_Robz_ADVPC,
   writeData(wb, 13, par5, startCol = 6, startRow = 9)
 
 
+  ##### Put the manual outlier override ######
+  c3 <- "Manual outlier override"
+  writeData(wb, 13, c3, startCol = 2, startRow = 22)
+  addStyle(wb, sheet = 13, styleBold, rows= 22 , cols= 2, gridExpand = TRUE)
   
-  #copy outlier overrides into summary worksheet
-  if (TF_outlier_override == TRUE)
-  {
-    c3 <- "Manual outlier override"
-    writeData(wb, 13, c3, startCol = 2, startRow = 22)
-    addStyle(wb, sheet = 13, styleBold, rows= 22 , cols= 2, gridExpand = TRUE)
+  
+  if(is.null(df_origin)){
+    df_manual_override =data.frame(matrix(nrow = 1, ncol = 5))
+    
+  }else{
+    d_a = Sph_Treat_Robz_ADVPC[(Sph_Treat_Robz_ADVPC$Area_status != df_origin$Area_status) & !is.na(Sph_Treat_Robz_ADVPC$Area_status),
+                         'Well.Name']
+    d_p = Sph_Treat_Robz_ADVPC[(Sph_Treat_Robz_ADVPC$Perimeter_status != df_origin$Perimeter_status) & !is.na(Sph_Treat_Robz_ADVPC$Perimeter_status),
+                                  'Well.Name']
+    d_c = Sph_Treat_Robz_ADVPC[(Sph_Treat_Robz_ADVPC$Circularity_status != df_origin$Circularity_status) & !is.na(Sph_Treat_Robz_ADVPC$Circularity_status),
+                                  'Well.Name']
+    d_d = Sph_Treat_Robz_ADVPC[(Sph_Treat_Robz_ADVPC$Diameter_status != df_origin$Diameter_status) & !is.na(Sph_Treat_Robz_ADVPC$Diameter_status),
+                                  'Well.Name']
+    d_v = Sph_Treat_Robz_ADVPC[(Sph_Treat_Robz_ADVPC$Volume_status != df_origin$Volume_status) & !is.na(Sph_Treat_Robz_ADVPC$Volume_status),
+                                  'Well.Name']
 
-
-    colnames(ADCVP_Override_data) <- c("Well", "Area", "Dia.", "Circ.","Vol.", "Perim." )
-
-    writeData(wb, 13, ADCVP_Override_data, startRow = 23, startCol = 2,  rowNames = FALSE, keepNA = FALSE, withFilter=FALSE)
-    addStyle(wb, sheet = 13, styleborderTBLR, rows= 23:119 , cols= 2:7, gridExpand = TRUE)
-    addStyle(wb, sheet = 13, greyshadeTBLR, rows= 23 , cols= 2:7, gridExpand = TRUE)
-    addStyle(wb, sheet = 13, greyshadeTBLR, rows= 23:119 , cols= 2, gridExpand = TRUE)
-
+    
+    df_manual_override = cbind.fill(d_a,d_p, d_c, d_d, d_v)
+    
   }
 
+  colnames(df_manual_override) <- c("Area", "Perim.", "Circ.", "Dia.","Vol." )
+
+  writeData(wb, 13, df_manual_override, startRow = 23, startCol = 2,  rowNames = FALSE, keepNA = FALSE, withFilter=FALSE)
+  addStyle(wb, sheet = 13, styleborderTBLR, rows= 23:119 , cols= 2:6, gridExpand = TRUE)
+  addStyle(wb, sheet = 13, greyshadeTBLR, rows= 23 , cols= 2:6, gridExpand = TRUE)
+ 
+    
+  
   if (TF_apply_thresholds == TRUE)
   {
     # Thresholdlayout <- read.xlsx("Sph_Config_File_Rev2.xlsx", sheet = "Pre-Screen", rows = c(1:3), cols = c(2:7),
@@ -703,8 +900,15 @@ gen_report = function(Sph_Treat_Robz_ADVPC,
 }
 
 
-manual_outlier_selections = outer(LETTERS[1:8], 1:12, FUN = "paste")
+#################### 
+##### Shiny App ####
+####################
+
+manual_outlier_selections = outer(LETTERS[1:8], paste0(1:12,'.'), FUN = "paste")
 dim(manual_outlier_selections) =NULL
+
+value_selections = list("Area", "Diameter", "Volume", "Perimeter" , "Circularity")
+
 # Define UI for application that draws a histogram
 ui <- navbarPage("SpheroidAnalyseR",
                              
@@ -714,12 +918,12 @@ ui <- navbarPage("SpheroidAnalyseR",
     # Sidebar with a slider input for number of bins 
     sidebarLayout(
         sidebarPanel(
-        fileInput(inputId = "raw_data","Choose Raw Data",accept=".xlsx",buttonLabel = "Browse"
-        ),
-        fileInput(inputId = "layout","Choose Plate Layout",accept=".csv",buttonLabel="Browse"
-        ),
-        fileInput(inputId = "treat_data","Choose Treatment Definitions",accept=".csv",buttonLabel="Browse"
-        )
+          fileInput(inputId = "raw_data","Choose Raw Data",accept=".xlsx",buttonLabel = "Browse"),
+          fileInput(inputId = "layout","Choose Plate Layout",accept=".csv",buttonLabel="Browse"),
+          fileInput(inputId = "treat_data","Choose Treatment Definitions",accept=".csv",buttonLabel="Browse"),
+          downloadButton("downloadRawTemplate_btn", "Download the raw data template"),
+          downloadButton("downloadLayoutTemplate_btn", "Download the plate layout template"),
+          downloadButton("downloadTreatTemplate_btn", "Download the treatment template")
         ),
         # Show a plot of the generated distribution
         mainPanel(
@@ -734,11 +938,25 @@ ui <- navbarPage("SpheroidAnalyseR",
     ),
     tabPanel("Outliers",
              sidebarLayout(
+
+               
                  sidebarPanel(
-                     numericInput("z_low","Robust z-score low limit",value = -1.96, step=0.01),
-                     numericInput("z_high","Robust z-score high limit",value = 1.96, step=0.01),
+                   actionButton("outlier_btn", "Remove outliers"),
+                   downloadButton("downloadData_btn", "Download"),
+                   textOutput("textStatus"),
+                   numericInput("z_score","Robust z-score",value = 1.96, step=0.01, min=0),
+                   
+                   selectInput("select_view_value",label="Choose the value to plot and manual override",
+                               value_selections),
+                   selectInput("manual_outliers",label="Toggle cells status normal/outliers",
+                               manual_outlier_selections,
+                               multiple=TRUE,selectize=TRUE),
+                   actionButton("manual_outliers_btn", "apply manual adjustment"),
+                   textOutput("manualStatus"),
+                     # numericInput("z_low","Robust z-score low limit",value = -1.96, step=0.01),
+                     # numericInput("z_high","Robust z-score high limit",value = 1.96, step=0.01),
                      checkboxInput("pre_screen","Apply Pre-screen thresholds?",value = TRUE),
-                     checkboxInput("override","Apply Manual overrides?",value = FALSE),
+                     # checkboxInput("override","Apply Manual overrides?",value = FALSE),
                      conditionalPanel(condition ="input.pre_screen==1",
                         #- Values above zero
                         numericInput("area_threshold_low","Area lower limit",value=1,min=0),
@@ -752,52 +970,42 @@ ui <- navbarPage("SpheroidAnalyseR",
                         numericInput("circ_threshold_low","Circularity lower limit",value=0.01,min=0),
                        numericInput("circ_threshold_high","Circularity higher limit",value=1,min=0)
                      )
-                     ,
-                     #
-                     conditionalPanel(condition="input.override==1",
-                                       selectInput("area_manual_outliers",label="Area Outliers to be removed",
-                                                   manual_outlier_selections,
-                                                   multiple=TRUE,selectize=TRUE),
-                                      
-                                      selectInput("diameter_manual_outliers",label="Diameter Outliers to be removed",
-                                                  manual_outlier_selections,
-                                                  multiple=TRUE,selectize=TRUE),
-                                      selectInput("volume_manual_outliers",label="Volume Outliers to be removed",
-                                                  manual_outlier_selections,
-                                                  multiple=TRUE,selectize=TRUE),
-                                      selectInput("perimeter_manual_outliers",label="Perimeter Outliers to be removed",
-                                                  manual_outlier_selections,
-                                                  multiple=TRUE,selectize=TRUE),
-                                      selectInput("circularity_manual_outliers",label="Circularity Outliers to be removed",
-                                                  manual_outlier_selections,
-                                                  multiple=TRUE,selectize=TRUE)
-                     )
-                     ,
-                     actionButton("outlier_btn", "Remove outliers"),
-                     downloadButton("downloadData_btn", "Download"),
-                     textOutput("textStatus")
+
                  ),
                  # Show a plot of the generated distribution
                  mainPanel(
                     useShinyjs(), 
-                     h2("Plate layout after pre-sreen outlier removal (if applied)"),
-                  
-                     selectInput("select_outlier_values",label="Choose the value to view outliers",
-                                 list("Area", "Diameter", "Volume", "Perimeter" , "Circularity")),
+
                      
+                    strong("Plate layout after pre-sreen outlier removal (if applied)"),
+                    
                      plotOutput("outlierPlot"),
                      
-                     h2("Plate layout after robust Z-score outlier removal"),
+                    strong("Plate layout after robust Z-score outlier removal"),
+                    plotOutput("resultPlot"),
+                    
+                    strong("Plot 1"),
+                    plotOutput("plot1Plot"),
+                    
+                    strong("Plot 2"),
+                    plotOutput("plot2Plot")
+                     # selectInput("select_z_scores",label="Choose the value to view result plots",
+                     #             list("Area", "Diameter", "Volume", "Perimeter" , "Circularity")),
                      
-                     selectInput("select_z_scores",label="Choose the value to view result plots",
-                                 list("Area", "Diameter", "Volume", "Perimeter" , "Circularity")),
                      
-                     plotOutput("resultPlot"),
-                     plotOutput("periPlot")
+                     
                      
                  )
              ) 
+    ),
+    tabPanel("Help",
+               mainPanel(
+                 includeHTML("help_file_page.html")
+               )
     )
+
+    
+    
 )
 
 
@@ -805,11 +1013,46 @@ ui <- navbarPage("SpheroidAnalyseR",
 server <- function(input, output,session) {
 
     df_output <- NULL
+    df_origin<-NULL
     df_outliers <- NULL
     global_wb <-NULL
      
     df_plot_treat <-NULL
     df_plot_layout <-NULL
+    
+    
+    ###preparing for the  generate the excel
+    global_rawfilename <-NULL
+    global_platesetupname <-NULL
+    
+    global_df_setup <-NULL
+    global_df_treat <-NULL
+    global_Spheroid_data <-NULL
+    
+    global_RobZ_LoLim <-NULL
+    global_RobZ_UpLim <-NULL
+    
+    global_TF_apply_thresholds <-NULL
+    global_TF_outlier_override <-NULL
+    global_TF_copytomergedir <-NULL
+    
+
+    global_TH_Area_min <-NULL
+    global_TH_Area_max <-NULL
+    
+    global_TH_Diameter_min <-NULL
+    global_TH_Diameter_max <-NULL
+    
+    global_TH_Volume_min <-NULL
+    global_TH_Volume_max <-NULL
+    
+    global_TH_Perimeter_min <-NULL
+    global_TH_Perimeter_max <-NULL
+    
+    global_TH_Circularity_min <-NULL
+    global_TH_Circularity_max <-NULL
+
+    
     
     output$data_preview <- renderTable(
         {
@@ -981,12 +1224,14 @@ server <- function(input, output,session) {
       
     })
     
-   
+  
+    
     output_report <- eventReactive(input$outlier_btn, {
       validate(
-     
-        need(is.numeric(input$z_low), "Please check if the low limit of the Z score is numeric"),
-        need(is.numeric(input$z_high), "Please check if the high limit of the Z score is numeric"),
+        need(is.numeric(input$z_score) & input$z_score>0, "Please input a positive Z score (numeric)"),
+        
+        # need(is.numeric(input$z_low), "Please check if the low limit of the Z score is numeric"),
+        # need(is.numeric(input$z_high), "Please check if the high limit of the Z score is numeric"),
         
         need(is.numeric(input$area_threshold_low) & input$area_threshold_low>0, "Please input a positive area threshold (numeric)"),
         need(is.numeric(input$area_threshold_high) & input$area_threshold_high>0, "Please input a positive area threshold (numeric)"),
@@ -1036,12 +1281,14 @@ server <- function(input, output,session) {
       # Spheroid_data <- suppressMessages(read_excel(input_file, "JobView",col_names=TRUE, .name_repair = "universal"))
       
       
+      RobZ_LoLim <- -(input$z_score)
+      RobZ_UpLim <- input$z_score
       
-      RobZ_LoLim <- input$z_low
-      RobZ_UpLim <- input$z_high
+      # RobZ_LoLim <- input$z_low
+      # RobZ_UpLim <- input$z_high
       
       TF_apply_thresholds <- input$pre_screen
-      TF_outlier_override <- input$override
+      TF_outlier_override <- FALSE
       TF_copytomergedir <- FALSE
       
 
@@ -1208,132 +1455,69 @@ server <- function(input, output,session) {
       Sph_Treat_Robz_ADVPC$Perimeter_OR <- ifelse(Sph_Treat_Robz_ADVPC$Perimeter_status=='0', Sph_Treat_Robz_ADVPC$Perimeter, NA)
       Sph_Treat_Robz_ADVPC <- Sph_Treat_Robz_ADVPC[with(Sph_Treat_Robz_ADVPC, order(Row, Col)),]
       
+      
+      ### Apply manual override ###
+      
+      
+      
       ## assign to df_output
       df_output <<- Sph_Treat_Robz_ADVPC
       
-      ######################################################################
-      ###########  START REPORT / PLOTTING 
-      ######################################################################
-      
-      Sph_Treat_Robz_ADVPC$T_I <- as.numeric(Sph_Treat_Robz_ADVPC$T_I)
-      Sph_Treat_ADVPC <- Sph_Treat_Robz_ADVPC[with(Sph_Treat_Robz_ADVPC, order(T_I)),]
+      if(is.null(df_origin)){
+        df_origin<<- Sph_Treat_Robz_ADVPC
+      }
 
+      ###preparing for the  generate the excel
+      global_rawfilename <<- rawfilename
+      global_platesetupname <<- platesetupname
+      
+      global_df_setup <<- df_setup
+      global_df_treat <<- df_treat
+      global_Spheroid_data <<- Spheroid_data
+      
+      global_RobZ_LoLim <<- RobZ_LoLim
+      global_RobZ_UpLim <<- RobZ_UpLim
+      
+      global_TF_apply_thresholds <<- TF_apply_thresholds
+      global_TF_outlier_override <<-TF_outlier_override
+      global_TF_copytomergedir <<- TF_copytomergedir
 
-      ############################################
-      ## Generate plots and Write into spreadsheet
-      
-      #- ploting config
-      AreaPointcolour <- "black"
-      PerimeterPointcolour <- "black"
-      CircularityPointcolour <- "black"
-      CircularityPointcolour <- "black"
-      VolumePointcolour <- "black"
-      OutlierPointcolour <- "red"
-      Pointsize <- 1.5
-      OutlierPointSize  <- 1.5
-      
-      Arealabel = expression("Area" ~ (mu~m^{2} ))
-      Diameterlabel = expression("Diameter" ~ (mu~m ))
-      Volumelabel = expression("Volume" ~ (mu~m^{3} ))
-      Perimeterlabel = expression("Perimeter" ~ (mu~m ))
-      
-
-      cols <- c("1" = "red", "0" = "black")
-      #cols <- c("Outlier" = "red", "Normal" = "black")
-
-      ######### Area PLots
-      
-      p_Area_new <- ggplot()  + geom_point(data = Sph_Treat_ADVPC, aes(x= Col, y=Area, colour = Area_status), size = Pointsize,  show.legend=FALSE ) + 
-        scale_x_continuous(limits=c(0,12),breaks = c(0,6,12))+
-        facet_wrap(~Sph_Treat_ADVPC$T_I, nrow=1) +
-        ylab(Arealabel)+xlab('Column') +  labs(title= " Area data by Treatment Index with outliers in red") + theme_bw() + theme(plot.title = element_text(size = 10))+ 
-        scale_colour_manual(values = cols) 
-      
-      
-      p_Area_dotplot_new <- ggerrorplot(Sph_Treat_ADVPC, x= "T_I", y="Area_OR", desc_stat ="mean_se", add = "dotplot", error.plot="errorbar", addparams= list(color="black", shape=21, binaxis="y", binwidth=2000, stackdir = "center", fill= "darkgray"))  + stat_summary(fun.y = mean, fun.ymin = mean, fun.ymax = mean,
-                                                                                                                                                                                                                                                                           geom = "crossbar", width = 0.25)  + 
-        ylab(Arealabel) +xlab('Treatment Index') +  labs(title= "Area  : Mean +/- SE  (outliers removed)") + theme_bw() + theme(plot.title = element_text(size = 10))
-      
-      
-      
-      ########################### Diameter PLots
-      p_Diameter_new <- ggplot()  + geom_point(data = Sph_Treat_ADVPC, aes(x= Col, y=Diameter, colour = Diameter_status), size = Pointsize,  show.legend=FALSE ) + 
-        # geom_point(data = Sph_Data_Out, aes(x= Col, y=Diameter_OO) , size = OutlierPointSize, colour = OutlierPointcolour ) +ylab(' Diameter  (um^2)')   xlab('Column') +
-        scale_x_continuous(limits=c(0,12),breaks = c(0,6,12))+
-        facet_wrap(~Sph_Treat_ADVPC$T_I, nrow=1) +
-        #   ylab(Arealabel) +xlab('Column') +  labs(title= " Area data by Treatment Index with outliers in red") + theme_bw() + theme(plot.title = element_text(size = 10))
-        ylab(Diameterlabel)+xlab('Column') +  labs(title= " Diameter data by Treatment Index with outliers in red") + theme_bw() + theme(plot.title = element_text(size = 10))+ 
-        scale_colour_manual(values = cols) 
-      
-      p_Diameter_dotplot_new <- ggerrorplot(Sph_Treat_ADVPC, x= "T_I", y="Diameter_OR", desc_stat ="mean_se", add = "dotplot", error.plot="errorbar", addparams= list(color="black", shape=21, binaxis="y", binwidth=2000, stackdir = "center", fill= "darkgray"))  + stat_summary(fun.y = mean, fun.ymin = mean, fun.ymax = mean,
-                                                                                                                                                                                                                                                                                   geom = "crossbar", width = 0.25)  + 
-        ylab(Diameterlabel) +xlab('Treatment Index') +  labs(title= "Diameter  : Mean +/- SE  (outliers removed)") + theme_bw() + theme(plot.title = element_text(size = 10))
-      
-      
-      ########################### Circularity PLots
-      
-      p_Circularity_new <- ggplot()  + geom_point(data = Sph_Treat_ADVPC, aes(x= Col, y=Circularity, colour = Circularity_status), size = Pointsize,  show.legend=FALSE ) + 
-        scale_x_continuous(limits=c(0,12),breaks = c(0,6,12))+
+      if(TF_apply_thresholds){
+        global_TH_Area_min <<- TH_Area_min 
+        global_TH_Area_max <<- TH_Area_max
         
-        facet_wrap(~Sph_Treat_ADVPC$T_I, nrow=1) +
-        ylab('Circularity')+xlab('Column') +  labs(title= " Circularity data by Treatment Index with outliers in red") + theme_bw() + theme(plot.title = element_text(size = 10))+ 
-        scale_colour_manual(values = cols) 
-      
-      p_Circularity_dotplot_new <- ggerrorplot(Sph_Treat_ADVPC, x= "T_I", y="Circularity_OR", desc_stat ="mean_se", add = "dotplot", error.plot="errorbar", addparams= list(color="black", shape=21, binaxis="y", binwidth=2000, stackdir = "center", fill= "darkgray"))  + stat_summary(fun.y = mean, fun.ymin = mean, fun.ymax = mean,
-                                                                                                                                                                                                                                                                                         geom = "crossbar", width = 0.25)  + 
-        ylab('Circularity') +xlab('Treatment Index') +  labs(title= "Circularity  : Mean +/- SE  (outliers removed)") + theme_bw() + theme(plot.title = element_text(size = 10))
-      
-      
-      
-      
-      ########################### Volume PLots
-      
-      p_Volume_new <- ggplot()  + geom_point(data = Sph_Treat_ADVPC, aes(x= Col, y=Volume, colour = Volume_status), size = Pointsize,  show.legend=FALSE ) + 
-        scale_x_continuous(limits=c(0,12),breaks = c(0,6,12))+
+        global_TH_Diameter_min <<- TH_Diameter_min
+        global_TH_Diameter_max <<- TH_Diameter_max
         
-        facet_wrap(~Sph_Treat_ADVPC$T_I, nrow=1) +
-        ylab(Volumelabel)+xlab('Column') +  labs(title= " Volume data by Treatment Index with outliers in red") + theme_bw() + theme(plot.title = element_text(size = 10))+ 
-        scale_colour_manual(values = cols) 
-
-      
-      p_Volume_dotplot_new <- ggerrorplot(Sph_Treat_ADVPC, x= "T_I", y="Volume_OR", desc_stat ="mean_se", add = "dotplot", error.plot="errorbar", addparams= list(color="black", shape=21, binaxis="y", binwidth=2000, stackdir = "center", fill= "darkgray"))  + stat_summary(fun.y = mean, fun.ymin = mean, fun.ymax = mean,
-                                                                                                                                                                                                                                                                               geom = "crossbar", width = 0.25)  + 
-        ylab(Volumelabel) +xlab('Treatment Index') +  labs(title= "Volume  : Mean +/- SE  (outliers removed)") + theme_bw() + theme(plot.title = element_text(size = 10))
-      
-      ########################### Perimeter PLots
-      
-      p_Perimeter_new <- ggplot()  + geom_point(data = Sph_Treat_ADVPC, aes(x= Col, y=Perimeter, colour = Perimeter_status), size = Pointsize,  show.legend=FALSE ) + 
-        scale_x_continuous(limits=c(0,12),breaks = c(0,6,12))+
+        global_TH_Volume_min <<- TH_Volume_min
+        global_TH_Volume_max <<- TH_Volume_max
         
-        facet_wrap(~Sph_Treat_ADVPC$T_I, nrow=1) +
-        ylab(Perimeterlabel)+xlab('Column') +  labs(title= " Perimeter data by Treatment Index with outliers in red") + theme_bw() + theme(plot.title = element_text(size = 10))+ 
-        scale_colour_manual(values = cols) 
-
-      p_Perimeter_dotplot_new <- ggerrorplot(Sph_Treat_ADVPC, x= "T_I", y="Perimeter_OR", desc_stat ="mean_se", add = "dotplot", error.plot="errorbar", addparams= list(color="black", shape=21, binaxis="y", binwidth=2000, stackdir = "center", fill= "darkgray")) + 
-        stat_summary(fun.y = mean, fun.ymin = mean, fun.ymax = mean,geom = "crossbar", width = 0.25)  + 
-        ylab(Perimeterlabel) +xlab('Treatment Index') +  labs(title= "Perimeter  : Mean +/- SE  (outliers removed)") + theme_bw() + theme(plot.title = element_text(size = 10))
+        global_TH_Perimeter_min <<- TH_Perimeter_min
+        global_TH_Perimeter_max <<- TH_Perimeter_max
+        
+        global_TH_Circularity_min <<- TH_Circularity_min
+        global_TH_Circularity_max <<-TH_Circularity_max
+      }
       
       
-     
-      
-      global_wb <<- gen_report(Sph_Treat_Robz_ADVPC=Sph_Treat_Robz_ADVPC,
-                               df_treat = df_treat,df_setup = df_setup,
-                               Spheroid_data=Spheroid_data,
-                               p_Area_new = p_Area_new, p_Area_dotplot_new = p_Area_dotplot_new,
-                               p_Diameter_new =p_Diameter_new, p_Diameter_dotplot_new =p_Diameter_dotplot_new,
-                               p_Circularity_new = p_Circularity_new, p_Circularity_dotplot_new = p_Circularity_dotplot_new,
-                               p_Volume_new = p_Volume_new, p_Volume_dotplot_new = p_Volume_dotplot_new,
-                               p_Perimeter_new= p_Perimeter_new , p_Perimeter_dotplot_new = p_Perimeter_dotplot_new,
-                               rawfilename = rawfilename ,platesetupname=platesetupname,
-                               RobZ_LoLim = RobZ_LoLim, RobZ_UpLim = RobZ_UpLim,
-                               TF_apply_thresholds = TF_apply_thresholds,
-                               TF_outlier_override = TF_outlier_override,
-                               TH_Area_max=TH_Area_max,TH_Area_min=TH_Area_min,
-                               TH_Diameter_max=TH_Diameter_max,TH_Diameter_min=TH_Diameter_min,
-                               TH_Volume_max=TH_Volume_max, TH_Volume_min=TH_Volume_min,
-                               TH_Perimeter_max = TH_Perimeter_max, TH_Perimeter_min=TH_Perimeter_min,
-                               TH_Circularity_max = TH_Circularity_max, TH_Circularity_min=TH_Circularity_min
-                               )
+      # global_wb <<- gen_report(Sph_Treat_Robz_ADVPC=Sph_Treat_Robz_ADVPC,
+      #                          df_treat = df_treat,df_setup = df_setup,
+      #                          Spheroid_data=Spheroid_data,
+      #                          # p_Area_new = p_Area_new, p_Area_dotplot_new = p_Area_dotplot_new,
+      #                          # p_Diameter_new =p_Diameter_new, p_Diameter_dotplot_new =p_Diameter_dotplot_new,
+      #                          # p_Circularity_new = p_Circularity_new, p_Circularity_dotplot_new = p_Circularity_dotplot_new,
+      #                          # p_Volume_new = p_Volume_new, p_Volume_dotplot_new = p_Volume_dotplot_new,
+      #                          # p_Perimeter_new= p_Perimeter_new , p_Perimeter_dotplot_new = p_Perimeter_dotplot_new,
+      #                          rawfilename = rawfilename ,platesetupname=platesetupname,
+      #                          RobZ_LoLim = RobZ_LoLim, RobZ_UpLim = RobZ_UpLim,
+      #                          TF_apply_thresholds = TF_apply_thresholds,
+      #                          TF_outlier_override = TF_outlier_override,
+      #                          TH_Area_max=TH_Area_max,TH_Area_min=TH_Area_min,
+      #                          TH_Diameter_max=TH_Diameter_max,TH_Diameter_min=TH_Diameter_min,
+      #                          TH_Volume_max=TH_Volume_max, TH_Volume_min=TH_Volume_min,
+      #                          TH_Perimeter_max = TH_Perimeter_max, TH_Perimeter_min=TH_Perimeter_min,
+      #                          TH_Circularity_max = TH_Circularity_max, TH_Circularity_min=TH_Circularity_min
+      #                          )
       
       message("All processing completed successfully.", "\n")
       message("\n") 
@@ -1348,42 +1532,139 @@ server <- function(input, output,session) {
       "Report generated, please download the report"
     })
     
-    output$textStatus<-  renderText({
-      output_report()
-    })
-
-      output$outlierPlot <- renderPlot({
-        validate(need(df_output,"Please run the outlier removal"))
-        df_outlier_temp = df_output
-        draw_outlier_plot(df_outlier_temp,input$select_outlier_values)
-      })
-      
-      
-      output$resultPlot <- renderPlot({
-        validate(need(df_output,"Please run the outlier removal"))
-        Sph_Treat_ADVPC = df_output
-        draw_z_score_outlier_plot(Sph_Treat_ADVPC,input$select_z_scores)
-      
-        
-      })
-      
-      ### event from clicking the remove outlier button
-      ### draw layout 
-      observeEvent(input$outlier_btn, {
+      output$textStatus<-  renderText({
         output_report()
-        
+      })
+
+      # output$outlierPlot <- renderPlot({
+      #   message(input$select_view_value)
+      #   validate(need(df_output,"Please run the outlier removal"))
+      #   message(paste("plot",input$select_view_value))
+      #   df_outlier_temp = df_output
+      #   draw_outlier_plot(df_outlier_temp,input$select_view_value)
+      # })
+      # 
+      # 
+      # output$resultPlot <- renderPlot({
+      #   message(input$select_view_value)
+      #   validate(need(df_output,"Please run the outlier removal"))
+      #   Sph_Treat_ADVPC = df_output
+      #   draw_z_score_outlier_plot(Sph_Treat_ADVPC,input$select_view_value)
+      # 
+      # })
+      # 
+      # output$plot1Plot <- renderPlot({
+      #   message(input$select_view_value)
+      #   validate(need(df_output,"Please run the outlier removal"))
+      #   draw_plot_1(df_output,input$select_view_value )
+      #   
+      # })
+      # 
+      # output$plot2Plot <- renderPlot({
+      #   message(input$select_view_value)
+      #   validate(need(df_output,"Please run the outlier removal"))
+      #   draw_plot_2(df_output,input$select_view_value )
+      # })
+      
+      update_plots = function(df, value){
         output$outlierPlot <- renderPlot({
-          df_outlier_temp = df_output
-          draw_outlier_plot(df_outlier_temp,input$select_outlier_values)
-
+          validate(need(df,"Please run the outlier removal"))
+          draw_outlier_plot(df,value)
+          
         })
-
         
         output$resultPlot <- renderPlot({
-          message(typeof(df_output))
-          Sph_Treat_ADVPC = df_output
-          draw_z_score_outlier_plot(Sph_Treat_ADVPC,input$select_z_scores)
+          validate(need(df,"Please run the outlier removal"))
+          draw_z_score_outlier_plot(df,value)
         })
+        
+        output$plot1Plot <- renderPlot({
+          validate(need(df,"Please run the outlier removal"))
+          draw_plot_1(df,value)
+          
+        })
+        
+        output$plot2Plot <- renderPlot({
+          validate(need(df,"Please run the outlier removal"))
+          draw_plot_2(df,value )
+        })
+        
+      }
+      
+      
+      observeEvent(input$select_view_value, {
+        update_plots(df_output , input$select_view_value)
+      })
+      
+      ### draw plots on the shiny app after outlier removal 
+      observeEvent(input$outlier_btn, {
+        output_report()
+        update_plots(df_output , input$select_view_value)
+      })
+      
+
+      manual_override <- eventReactive(input$manual_outliers_btn,{
+
+        validate(need(df_output,"Please run the outlier removal"))
+        validate(need(input$manual_outliers,"Please select wells to override"))
+        
+        
+        selections=str_split(input$manual_outliers,'\\.')
+        value_col=  paste0(input$select_view_value, "_status")
+        
+        check_non_exist_well=FALSE
+        for(i in 1:length(selections)){
+          split_result = str_split(selections[i][[1]],' ')[[1]]
+          row_id = split_result[1]
+          col_id = split_result[2]
+          if(!any(df_output$Row==row_id & df_output$Col==col_id, na.rm = TRUE)){
+            check_non_exist_well=TRUE
+            break
+          }
+        }
+
+        validate(need(!check_non_exist_well,"Please select existed wells"))
+
+        
+        for(i in 1:length(selections)){
+          split_result = str_split(selections[i][[1]],' ')[[1]]
+          row_id = split_result[1]
+          col_id = split_result[2]
+
+          previous = df_output[df_output$Row==row_id & df_output$Col==col_id, value_col]
+          
+          message(paste("value ",row_id, col_id, is.na(previous)))
+          message(paste("value ",row_id, col_id, previous))
+          if(!is.na(previous)){
+            if(previous =='1'){
+              df_output[df_output$Row==row_id & df_output$Col==col_id, value_col]='0'
+            }
+            if(previous =='0'){
+              df_output[df_output$Row==row_id & df_output$Col==col_id, value_col]='1'
+            }
+            
+          }
+
+        }
+        df_output <<- update_df_OR_by_status(df_output)
+        
+        
+
+        "Override successfully"
+      }
+      )
+      ### event from clicking the remove outlier button
+      output$manualStatus<-  renderText({
+        manual_override()
+      })
+      
+      observeEvent(input$manual_outliers_btn, {
+
+
+        manual_override()
+
+        update_plots(df_output , input$select_view_value)
+        
         
       })
       
@@ -1399,10 +1680,10 @@ server <- function(input, output,session) {
         }
       })
  
-      # toggleView <- function(input, output_name){
-      #   observeEvent(input$, {show(output_name)})
-      #   observeEvent(input$hide, {hide(output_name)})
-      # }
+      observeEvent(input$downloadData_btn,{
+        message("Preparing")
+
+      })
       
     ### Download report
     output$downloadData_btn <- downloadHandler(
@@ -1411,8 +1692,66 @@ server <- function(input, output,session) {
         paste( "report.xlsx", sep = "")
       },
       content = function(file) {
-        # write.csv(df_output, file, row.names = FALSE)
+        message("Preparing")
+
+        
+        global_wb <<- gen_report(Sph_Treat_Robz_ADVPC=df_output,
+                                 df_treat = global_df_treat,df_setup = global_df_setup,
+                                 Spheroid_data=global_Spheroid_data,
+                                 df_origin = df_origin,
+                                 rawfilename = global_rawfilename ,platesetupname=global_platesetupname,
+                                 RobZ_LoLim = global_RobZ_LoLim, RobZ_UpLim = global_RobZ_UpLim,
+                                 TF_apply_thresholds = global_TF_apply_thresholds,
+                                 TF_outlier_override = global_TF_outlier_override,
+                                 TH_Area_max=global_TH_Area_max,TH_Area_min=global_TH_Area_min,
+                                 TH_Diameter_max=global_TH_Diameter_max,TH_Diameter_min=global_TH_Diameter_min,
+                                 TH_Volume_max=global_TH_Volume_max, TH_Volume_min=global_TH_Volume_min,
+                                 TH_Perimeter_max = global_TH_Perimeter_max, TH_Perimeter_min=global_TH_Perimeter_min,
+                                 TH_Circularity_max = global_TH_Circularity_max, TH_Circularity_min=global_TH_Circularity_min)
+        
         saveWorkbook(global_wb, file, overwrite = TRUE)
+        
+      }
+    )
+    
+    output$downloadRawTemplate_btn <- downloadHandler(
+      
+      filename = function() {
+        paste( "template_raw_data.xlsx", sep = "")
+      },
+      content = function(file) {
+        
+        df_temp = read_excel("template_raw_data.xlsx", "JobView",col_names=TRUE, .name_repair = "universal")
+        write.xlsx(df_temp,file ,sheetName = "JobView" )
+        
+      }
+    )
+    
+    
+    output$downloadLayoutTemplate_btn <- downloadHandler(
+      
+      filename = function() {
+        paste( "template_layout.csv", sep = "")
+      },
+      content = function(file) {
+        df_temp = read.csv("template_layout.csv")
+        
+        write.csv(df_temp,file)
+        # saveWorkbook(global_wb, file, overwrite = TRUE)
+        
+      }
+    )
+    
+    output$downloadTreatTemplate_btn <- downloadHandler(
+      
+      filename = function() {
+        paste( "template_treatment.csv", sep = "")
+      },
+      content = function(file) {
+        df_temp = read.csv("template_treatment.csv")
+        
+        write.csv(df_temp,file)
+        # saveWorkbook(global_wb, file, overwrite = TRUE)
         
       }
     )
