@@ -941,6 +941,7 @@ ui <- navbarPage("SpheroidAnalyseR",
 
                
                  sidebarPanel(
+
                    actionButton("outlier_btn", "Remove outliers"),
                    downloadButton("downloadData_btn", "Download"),
                    textOutput("textStatus"),
@@ -957,6 +958,8 @@ ui <- navbarPage("SpheroidAnalyseR",
                      # numericInput("z_high","Robust z-score high limit",value = 1.96, step=0.01),
                      checkboxInput("pre_screen","Apply Pre-screen thresholds?",value = TRUE),
                      # checkboxInput("override","Apply Manual overrides?",value = FALSE),
+
+
                      conditionalPanel(condition ="input.pre_screen==1",
                         #- Values above zero
                         numericInput("area_threshold_low","Area lower limit",value=1,min=0),
@@ -970,6 +973,7 @@ ui <- navbarPage("SpheroidAnalyseR",
                         numericInput("circ_threshold_low","Circularity lower limit",value=0.01,min=0),
                        numericInput("circ_threshold_high","Circularity higher limit",value=1,min=0)
                      )
+
 
                  ),
                  # Show a plot of the generated distribution
