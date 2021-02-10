@@ -705,6 +705,8 @@ gen_report = function(Sph_Treat_Robz_ADVPC,
 
   ADVPC_means <- ADVPC_means[with(ADVPC_means, order(T_I)),]
 
+  
+  ### use ADVPC_means to generate merge file
   if (TF_copytomergedir == 'TRUE')
   {
 
@@ -899,6 +901,94 @@ gen_report = function(Sph_Treat_Robz_ADVPC,
   return(wb)
 }
 
+generate_merge_result = function(df,Spheroid_data, rawfilename,df_treat){
+
+  df$T_I <- as.numeric(df$T_I)
+  Sph_Treat_ADVPC <- df[with(df, order(T_I)),]
+  
+  Sph_ADVPC <- Sph_Treat_ADVPC
+
+  
+  dropped_cols=setdiff(colnames(Sph_ADVPC), 
+                       intersect(colnames(Sph_ADVPC), colnames(df_treat)))
+  dropped_cols=c('T_I',dropped_cols)
+  Sph_ADVPC = Sph_ADVPC[, dropped_cols]
+  
+  
+  # merge with treatment data
+  
+  Sph_ADVPC  <- merge(Sph_ADVPC, df_treat, by= "T_I")
+  
+  Sph_ADVPC <- Sph_ADVPC[with(Sph_ADVPC, order(Row, Col)),]
+  
+  Job_Info_data <- select(Spheroid_data, Jobrun.Finish.Time)
+  
+  Sph_ADVPC$Job.Date <- as.Date(Job_Info_data$Jobrun.Finish.Time, origin="1900-01-01")
+  
+  #work out time diff in days ETST.
+  
+  Sph_ADVPC$ETST.d <-  difftime(Sph_ADVPC$Job.Date, Sph_ADVPC$Time_Date, units= "days")
+  Sph_ADVPC$ETST.h <-  difftime(Sph_ADVPC$Job.Date, Sph_ADVPC$Time_Date, units= "hours")
+  
+  
+  
+  Sph_ADVPC$Filename <- rawfilename
+  Sph_ADVPCa <-  Sph_ADVPC
+  
+  # calculate Means and SE's for A D C V P items
+  
+  aArea_means <- data_summary_TI(Sph_ADVPCa, varname="Area_OR",
+                                 groupnames=c("T_I"))
+  
+  aDiameter_means <- data_summary_TI(Sph_ADVPCa, varname="Diameter_OR",
+                                     groupnames=c("T_I"))
+  
+  aCircularity_means <- data_summary_TI(Sph_ADVPCa, varname="Circularity_OR",
+                                        groupnames=c("T_I"))
+  
+  
+  aVolume_means <- data_summary_TI(Sph_ADVPCa, varname="Volume_OR",
+                                   groupnames=c("T_I"))
+  
+  
+  aPerimeter_means <- data_summary_TI(Sph_ADVPCa, varname="Perimeter_OR",
+                                      groupnames=c("T_I"))
+  
+  
+  #merge all mean+SE datasets sequentially
+  a_allmeans <- merge(aArea_means, aDiameter_means, by= "T_I")
+  a_allmeans1 <- merge(a_allmeans, aCircularity_means, by= "T_I")
+  a_allmeans2 <- merge(a_allmeans1, aVolume_means, by= "T_I")
+  a_allmeans3 <- merge(a_allmeans2, aPerimeter_means, by= "T_I")
+  colnames(a_allmeans3)<- c("T_I", "Area_Mean","Area_SE","Diameter_Mean","Diameter_SE","Circularity_Mean",
+                            "Circularity_SE","Volume_Mean","Volume_SE", "Perimeter_Mean","Perimeter_SE" )
+  
+  #subset TI and treatment items from main dataset
+
+  #merge final means dataset with Treatment data items
+  ADVPC_means <- merge(a_allmeans3, df_treat, by= "T_I")
+  
+  job.date = Job_Info_data$Jobrun.Finish.Time[1]
+  ADVPC_means$Job.Date <- job.date
+  
+  # calculate time diff in days and hours ETST.
+  
+  ADVPC_means$ETST.d <-  as.numeric(difftime(ADVPC_means$Job.Date, ADVPC_means$Time_Date, units= "days"))
+  ADVPC_means$ETST.h <-  as.numeric(difftime(ADVPC_means$Job.Date, ADVPC_means$Time_Date, units= "hours"))
+  ADVPC_means$Filename <- rawfilename
+  
+  print(names(ADVPC_means))
+  print(names(ADVPC_means)[13])
+  print(names(ADVPC_means)[23])
+  # names(ADVPC_means)[13] <- "Date_Treated"
+  # names(ADVPC_means)[23] <- "Date_Scanned"
+  # ADVPC_means <-  ADVPC_means[,c(1,12, 2:11,14:22, 13, 23:26)]
+  
+  ADVPC_means <- ADVPC_means[with(ADVPC_means, order(T_I)),]
+
+  return(ADVPC_means)  
+}
+
 
 #################### 
 ##### Shiny App ####
@@ -918,7 +1008,7 @@ ui <- navbarPage("SpheroidAnalyseR",
     # Sidebar with a slider input for number of bins 
     sidebarLayout(
         sidebarPanel(
-          fileInput(inputId = "raw_data","Choose Raw Data",accept=".xlsx",buttonLabel = "Browse"),
+          fileInput(inputId = "raw_data","Choose Raw Data",accept=".xlsx",buttonLabel = "Browse", multiple = TRUE),
           fileInput(inputId = "layout","Choose Plate Layout",accept=".csv",buttonLabel="Browse"),
           fileInput(inputId = "treat_data","Choose Treatment Definitions",accept=".csv",buttonLabel="Browse"),
           downloadButton("downloadRawTemplate_btn", "Download the raw data template"),
@@ -927,8 +1017,11 @@ ui <- navbarPage("SpheroidAnalyseR",
         ),
         # Show a plot of the generated distribution
         mainPanel(
-           h2("Preview the data"),           
+           h2("Preview the data"),    
+           selectInput("select_file_preview",label="Choose a raw file to preview",
+                       list()),
            tableOutput("data_preview"), 
+
            h2("Show the treatment groups on the plate"),
            selectInput("select_treatment",label="Choose the value to view the layout",
                        list()),
@@ -941,7 +1034,10 @@ ui <- navbarPage("SpheroidAnalyseR",
 
                
                  sidebarPanel(
-
+                   useShinyjs(), 
+                   selectInput("select_file",label="Choose a raw file",
+                               list()),
+                   
                    actionButton("outlier_btn", "Remove outliers"),
                    downloadButton("downloadData_btn", "Download"),
                    textOutput("textStatus"),
@@ -980,8 +1076,7 @@ ui <- navbarPage("SpheroidAnalyseR",
                  mainPanel(
                     useShinyjs(), 
 
-                     
-                    strong("Plate layout after pre-sreen outlier removal (if applied)"),
+                    strong("Plate layout after pre-sreen outlier removal (if applied)",id='title_pre'),
                     
                      plotOutput("outlierPlot"),
                      
@@ -1002,6 +1097,16 @@ ui <- navbarPage("SpheroidAnalyseR",
                  )
              ) 
     ),
+    
+    tabPanel("Merge",
+             sidebarPanel(downloadButton("downloadMerge_btn", "Download the merged file")),
+             mainPanel(
+               DT::dataTableOutput("merge_file")
+               # tableOutput("merge_file")
+               
+             )
+    ),
+    
     tabPanel("Help",
                mainPanel(
                  includeHTML("help_file_page.html")
@@ -1015,10 +1120,11 @@ ui <- navbarPage("SpheroidAnalyseR",
 
 # Define server logic required to draw a histogram
 server <- function(input, output,session) {
-
+    
+  
     df_output <- NULL
     df_origin<-NULL
-    df_outliers <- NULL
+
     global_wb <-NULL
      
     df_plot_treat <-NULL
@@ -1057,29 +1163,119 @@ server <- function(input, output,session) {
     global_TH_Circularity_max <-NULL
 
     
+    df_batch_detail <-data.frame()
+    
+    df_output_list <- FALSE
+    df_origin_list <- FALSE
+    df_spheroid_list <- FALSE
     
     output$data_preview <- renderTable(
         {
-        data <- readRawData()
-        if(!is.null(data))
-            head(data, n=3)
+          
+
+          file <- input$raw_data
+          name_id = which(file$name == input$select_file_preview)
+          print(input$select_file_preview)
+          print(file$datapath[name_id])
+          if(!is.null(file)){
+              ext <- tools::file_ext(file$datapath[name_id])
+              req(file)
+              validate(need(ext == "xlsx","Please upload an xlsx file"))
+              data <- readxl::read_xlsx(file$datapath[name_id])
+              head(data, n=3)
+          }
+          
+          
+        # data <- readRawData()
+        # if(!is.null(data))
+        #     head(data, n=3)
         }
 
     )
+
+    
     
 
-    readRawData <- reactive({
         
-        file <- input$raw_data
-
-        
-        if(!is.null(file)){
-            ext <- tools::file_ext(file$datapath)
-            req(file)
-            validate(need(ext == "xlsx","Please upload an xlsx file"))
-            data <- readxl::read_xlsx(file$datapath)
+ 
+    
+    # readRawData <- reactive({
+    # 
+    #     file <- input$raw_data
+    # 
+    #     ori_filename = input$raw_data$name
+    #     if(!is.null(file)){
+    #         for (datapath in file$datapath){
+    #           ext <- tools::file_ext(file$datapath)
+    #           req(file)
+    #           validate(need(ext == "xlsx","Please upload an xlsx file"))
+    #         }
+    #       
+    #       updateSelectInput(session, "select_file_preview",
+    #                         choices = ori_filename,
+    #                         selected = head(ori_filename, 1))
+    #         # 
+    #         # ext <- tools::file_ext(file$datapath)
+    #         # req(file)
+    #         # validate(need(ext == "xlsx","Please upload an xlsx file"))
+    #         # data <- readxl::read_xlsx(file$datapath)
+    #     }
+    # 
+    # })
+    
+    
+    observeEvent(input$raw_data, {
+      
+      file <- input$raw_data
+      
+      
+      if(!is.null(file)){
+        for (datapath in file$datapath){
+          ext <- tools::file_ext(file$datapath)
+          req(file)
+          validate(need(ext == "xlsx","Please upload an xlsx file"))
         }
-
+      
+      # get the original file names
+      ori_filename = input$raw_data$name
+      
+      #
+      updateSelectInput(session, "select_file_preview",
+                        choices = ori_filename,
+                        selected = head(ori_filename, 1))
+      
+      updateSelectInput(session, "select_file",
+                        choices = ori_filename,
+                        selected = head(ori_filename, 1))
+      
+      df_batch_detail<<-data.frame(File_name=ori_filename, Processed=rep(c(FALSE), times = length(ori_filename)),
+                                   Robust_Z_Low_Limit=NA,
+                                   Robust_Z_Upper_Limit= NA,
+                                   Threshold_Applied = NA,
+                                   Threshold_Area_Min =NA,
+                                   Threshold_Area_Max =NA,
+                                   Threshold_Diameter_Min =NA,
+                                   Threshold_Diameter_Max =NA,
+                                   Threshold_Volume_Min =NA,
+                                   Threshold_Volume_Max =NA,
+                                   Threshold_Perimeter_Min =NA,
+                                   Threshold_Perimeter_Max =NA,
+                                   Threshold_Circularity_Min =NA,
+                                   Threshold_Circularity_Max =NA
+                                   )
+      
+      df_output_list <<- vector("list", length = length(ori_filename))
+      df_origin_list <<- vector("list", length = length(ori_filename))
+      df_spheroid_list <<- vector("list", length = length(ori_filename))
+      
+      
+      output$merge_file <- 
+        DT::renderDataTable({
+          DT::datatable(
+            df_batch_detail,
+            options = list(scrollX = TRUE))})
+      
+      }
     })
     
     readLayout <- reactive({
@@ -1228,7 +1424,9 @@ server <- function(input, output,session) {
       
     })
     
+    #--- previewing data
   
+    #### outlier removal #####
     
     output_report <- eventReactive(input$outlier_btn, {
       validate(
@@ -1263,7 +1461,13 @@ server <- function(input, output,session) {
       #- do the thresholding and generate the wells
 
       #- read from the input
-      rawfilename = input$raw_data$datapath
+      
+      name_id = which(input$raw_data$name == input$select_file)
+      rawfilename = input$raw_data$datapath[name_id]  
+        
+      ori_rawfilename = input$select_file
+      
+      # rawfilename = input$raw_data$datapath
       platesetupname<- input$layout$datapath
       treat_file <- input$treat_data
       # 
@@ -1463,21 +1667,49 @@ server <- function(input, output,session) {
       ### Apply manual override ###
       
       
+      ### need lists to store dataframe
       
       ## assign to df_output
-      df_output <<- Sph_Treat_Robz_ADVPC
+
+      df_output_list[[name_id]] <<-Sph_Treat_Robz_ADVPC
+      # print(df_origin_list)
+      if(is.null(df_origin_list[[name_id]])){
+        df_origin_list[[name_id]]<<-Sph_Treat_Robz_ADVPC
+      }
+      df_spheroid_list[[name_id]]<<-Spheroid_data
       
+
+      df_output <<- Sph_Treat_Robz_ADVPC
       if(is.null(df_origin)){
         df_origin<<- Sph_Treat_Robz_ADVPC
       }
-
-      ###preparing for the  generate the excel
-      global_rawfilename <<- rawfilename
-      global_platesetupname <<- platesetupname
+      global_Spheroid_data <<- Spheroid_data
       
+      
+      
+      
+      #### preparing for the  generate the excel
+      
+      ## variables that are same across different data
+      # layout setup and treatment
       global_df_setup <<- df_setup
       global_df_treat <<- df_treat
-      global_Spheroid_data <<- Spheroid_data
+      # name of the setup
+      global_platesetupname <<-input$layout$name
+      
+      
+      ## variables that are different across different data
+      ## stored in a dataframe 
+      # names:
+      global_rawfilename <<- ori_rawfilename
+
+      
+      df_temp_batch_detail = df_batch_detail
+
+      df_temp_batch_detail$Robust_Z_Low_Limit[name_id] = RobZ_LoLim
+      df_temp_batch_detail$Robust_Z_Upper_Limit[name_id] = RobZ_UpLim
+      df_temp_batch_detail$Threshold_Applied[name_id] = TF_apply_thresholds
+      
       
       global_RobZ_LoLim <<- RobZ_LoLim
       global_RobZ_UpLim <<- RobZ_UpLim
@@ -1487,6 +1719,22 @@ server <- function(input, output,session) {
       global_TF_copytomergedir <<- TF_copytomergedir
 
       if(TF_apply_thresholds){
+        df_temp_batch_detail$Threshold_Area_Min[name_id] = TH_Area_min
+        df_temp_batch_detail$Threshold_Area_Max[name_id] = TH_Area_max
+        
+        df_temp_batch_detail$Threshold_Diameter_Min[name_id] = TH_Diameter_min
+        df_temp_batch_detail$Threshold_Diameter_Max[name_id] = TH_Diameter_max
+        
+        df_temp_batch_detail$Threshold_Perimeter_Min[name_id] = TH_Perimeter_min
+        df_temp_batch_detail$Threshold_Perimeter_Max[name_id] = TH_Perimeter_max
+        
+        df_temp_batch_detail$Threshold_Volume_Min[name_id] = TH_Volume_min
+        df_temp_batch_detail$Threshold_Volume_Max[name_id] = TH_Volume_max
+        
+        df_temp_batch_detail$Threshold_Circularity_Min[name_id] = TH_Circularity_min
+        df_temp_batch_detail$Threshold_Circularity_Max[name_id] = TH_Circularity_max
+        
+        ## original way to storing these values
         global_TH_Area_min <<- TH_Area_min 
         global_TH_Area_max <<- TH_Area_max
         
@@ -1502,7 +1750,11 @@ server <- function(input, output,session) {
         global_TH_Circularity_min <<- TH_Circularity_min
         global_TH_Circularity_max <<-TH_Circularity_max
       }
+      df_temp_batch_detail$Processed[name_id] = TRUE
       
+      df_batch_detail<<-df_temp_batch_detail
+      
+
       
       # global_wb <<- gen_report(Sph_Treat_Robz_ADVPC=Sph_Treat_Robz_ADVPC,
       #                          df_treat = df_treat,df_setup = df_setup,
@@ -1536,9 +1788,11 @@ server <- function(input, output,session) {
       "Report generated, please download the report"
     })
     
-      output$textStatus<-  renderText({
-        output_report()
-      })
+    ## renew the text in the outlier removal tab
+    ## event: after outlier removal
+    output$textStatus<-  renderText({
+      output_report()
+    })
 
       # output$outlierPlot <- renderPlot({
       #   message(input$select_view_value)
@@ -1595,23 +1849,52 @@ server <- function(input, output,session) {
         
       }
       
+      ## drawing plot in the outlier removal tab
+      ## event: select the viewing value
       
-      observeEvent(input$select_view_value, {
-        update_plots(df_output , input$select_view_value)
+      observeEvent(c(input$select_view_value , input$select_file), {
+        print("selected clicked")
+        if(typeof(df_output_list)=="list"){
+          name_id = which(input$raw_data$name == input$select_file)
+          df_temp = df_output_list[[name_id]]
+          
+          update_plots(df_temp , input$select_view_value)
+          
+        }
+        
+
       })
-      
-      ### draw plots on the shiny app after outlier removal 
+ 
+      ## drawing plot in the outlier removal tab
+      ## event: click the outlier removal button
       observeEvent(input$outlier_btn, {
         output_report()
-        update_plots(df_output , input$select_view_value)
+        name_id = which(input$raw_data$name == input$select_file)
+        df_temp = df_output_list[[name_id]]
+        
+        update_plots(df_temp , input$select_view_value)
+        
+        output$merge_file <- DT::renderDataTable({
+          DT::datatable(
+            df_batch_detail,options = list(scrollX = TRUE))})
+        
       })
       
 
+      ## update the current selected data using manual override
+      ## event: click the apply button
+      
       manual_override <- eventReactive(input$manual_outliers_btn,{
 
         validate(need(df_output,"Please run the outlier removal"))
         validate(need(input$manual_outliers,"Please select wells to override"))
         
+        
+        name_id = which(input$raw_data$name == input$select_file)
+        
+        validate(need(df_output_list[[name_id]],"Please run the outlier removal"))
+        
+        df_temp = df_output_list[[name_id]]
         
         selections=str_split(input$manual_outliers,'\\.')
         value_col=  paste0(input$select_view_value, "_status")
@@ -1621,7 +1904,7 @@ server <- function(input, output,session) {
           split_result = str_split(selections[i][[1]],' ')[[1]]
           row_id = split_result[1]
           col_id = split_result[2]
-          if(!any(df_output$Row==row_id & df_output$Col==col_id, na.rm = TRUE)){
+          if(!any(df_temp$Row==row_id & df_temp$Col==col_id, na.rm = TRUE)){
             check_non_exist_well=TRUE
             break
           }
@@ -1635,28 +1918,30 @@ server <- function(input, output,session) {
           row_id = split_result[1]
           col_id = split_result[2]
 
-          previous = df_output[df_output$Row==row_id & df_output$Col==col_id, value_col]
+          previous = df_temp[df_temp$Row==row_id & df_temp$Col==col_id, value_col]
           
           message(paste("value ",row_id, col_id, is.na(previous)))
           message(paste("value ",row_id, col_id, previous))
           if(!is.na(previous)){
             if(previous =='1'){
-              df_output[df_output$Row==row_id & df_output$Col==col_id, value_col]='0'
+              df_temp[df_temp$Row==row_id & df_temp$Col==col_id, value_col]='0'
             }
             if(previous =='0'){
-              df_output[df_output$Row==row_id & df_output$Col==col_id, value_col]='1'
+              df_temp[df_temp$Row==row_id & df_temp$Col==col_id, value_col]='1'
             }
             
           }
 
         }
-        df_output <<- update_df_OR_by_status(df_output)
+        df_output_list[[name_id]] <<- update_df_OR_by_status(df_temp)
         
         
 
         "Override successfully"
       }
       )
+      
+      
       ### event from clicking the remove outlier button
       output$manualStatus<-  renderText({
         manual_override()
@@ -1667,51 +1952,85 @@ server <- function(input, output,session) {
 
         manual_override()
 
-        update_plots(df_output , input$select_view_value)
+        name_id = which(input$raw_data$name == input$select_file)
         
+        df_temp = df_output_list[[name_id]]
+        
+        update_plots(df_temp , input$select_view_value)
+        
+        output$merge_file <- DT::renderDataTable({
+          DT::datatable(
+            df_batch_detail,options = list(scrollX = TRUE))})
         
       })
       
-      
+      ## hide the pre screen thresholds 
+      ## event click the tick box of showing the threshold
       observeEvent(input$pre_screen,{
         message(input$pre_screen)
         if(input$pre_screen==TRUE){
           show("outlierPlot")
           show("select_outlier_values")
+          shinyjs::show("title_pre")
         }else{
+          shinyjs::hide("title_pre")
           hide("outlierPlot")
           hide("select_outlier_values")
         }
       })
- 
+
       observeEvent(input$downloadData_btn,{
         message("Preparing")
 
       })
       
-    ### Download report
+    ### functions of downloading  
+      
+    ### Download report of the current selected file
     output$downloadData_btn <- downloadHandler(
 
       filename = function() {
-        paste( "report.xlsx", sep = "")
+        
+        file_name = paste0("report_",input$select_file,".xlsx")
+        paste(file_name, sep = "")
       },
       content = function(file) {
         message("Preparing")
-
         
-        global_wb <<- gen_report(Sph_Treat_Robz_ADVPC=df_output,
+        ## get the name id
+        name_id = which(input$raw_data$name == input$select_file)
+        ## get the correct variable
+        df_file_detail = df_batch_detail[name_id,]
+
+        global_wb <<- gen_report(Sph_Treat_Robz_ADVPC=df_output_list[[name_id]],
                                  df_treat = global_df_treat,df_setup = global_df_setup,
-                                 Spheroid_data=global_Spheroid_data,
-                                 df_origin = df_origin,
-                                 rawfilename = global_rawfilename ,platesetupname=global_platesetupname,
-                                 RobZ_LoLim = global_RobZ_LoLim, RobZ_UpLim = global_RobZ_UpLim,
-                                 TF_apply_thresholds = global_TF_apply_thresholds,
+                                 Spheroid_data=df_spheroid_list[[name_id]],
+                                 df_origin = df_origin_list[[name_id]],
+                                 rawfilename = df_file_detail$File_name ,platesetupname=global_platesetupname,
+                                 RobZ_LoLim = df_file_detail$Robust_Z_Low_Limit, RobZ_UpLim = df_file_detail$Robust_Z_Upper_Limit,
+                                 TF_apply_thresholds = df_file_detail$Threshold_Applied,
                                  TF_outlier_override = global_TF_outlier_override,
-                                 TH_Area_max=global_TH_Area_max,TH_Area_min=global_TH_Area_min,
-                                 TH_Diameter_max=global_TH_Diameter_max,TH_Diameter_min=global_TH_Diameter_min,
-                                 TH_Volume_max=global_TH_Volume_max, TH_Volume_min=global_TH_Volume_min,
-                                 TH_Perimeter_max = global_TH_Perimeter_max, TH_Perimeter_min=global_TH_Perimeter_min,
-                                 TH_Circularity_max = global_TH_Circularity_max, TH_Circularity_min=global_TH_Circularity_min)
+                                 TH_Area_max=df_file_detail$Threshold_Area_Max,TH_Area_min=df_file_detail$Threshold_Area_Min,
+                                 TH_Diameter_max=df_file_detail$Threshold_Diameter_Max,TH_Diameter_min=df_file_detail$Threshold_Diameter_Min,
+                                 TH_Volume_max=df_file_detail$Threshold_Volume_Max, TH_Volume_min=df_file_detail$Threshold_Volume_Min,
+                                 TH_Perimeter_max = df_file_detail$Threshold_Perimeter_Max, TH_Perimeter_min=df_file_detail$Threshold_Perimeter_Min,
+                                 TH_Circularity_max = df_file_detail$Threshold_Circularity_Max, TH_Circularity_min=df_file_detail$Threshold_Circularity_Min)
+        
+        
+        
+        # global_wb <<- gen_report(Sph_Treat_Robz_ADVPC=df_output,
+        #                          df_treat = global_df_treat,df_setup = global_df_setup,
+        #                          Spheroid_data=global_Spheroid_data,
+        #                          df_origin = df_origin,
+        #                          rawfilename = global_rawfilename ,platesetupname=global_platesetupname,
+        #                          RobZ_LoLim = global_RobZ_LoLim, RobZ_UpLim = global_RobZ_UpLim,
+        #                          TF_apply_thresholds = global_TF_apply_thresholds,
+        #                          TF_outlier_override = global_TF_outlier_override,
+        #                          TH_Area_max=global_TH_Area_max,TH_Area_min=global_TH_Area_min,
+        #                          TH_Diameter_max=global_TH_Diameter_max,TH_Diameter_min=global_TH_Diameter_min,
+        #                          TH_Volume_max=global_TH_Volume_max, TH_Volume_min=global_TH_Volume_min,
+        #                          TH_Perimeter_max = global_TH_Perimeter_max, TH_Perimeter_min=global_TH_Perimeter_min,
+        #                          TH_Circularity_max = global_TH_Circularity_max, TH_Circularity_min=global_TH_Circularity_min)
         
         saveWorkbook(global_wb, file, overwrite = TRUE)
         
@@ -1755,6 +2074,97 @@ server <- function(input, output,session) {
         df_temp = read.csv("template_treatment.csv")
         
         write.csv(df_temp,file)
+        # saveWorkbook(global_wb, file, overwrite = TRUE)
+        
+      }
+    )
+    
+    merge_results = function(){
+      result_list = list()
+      for(i in 1:length(df_batch_detail$File_name)){
+
+        # generate_merge_result(df_output_list[i],df_spheroid_list[i], df_batch_detail$File_name[i],global_df_treat)
+        # print(generate_merge_result(df_output_list[[i]],df_spheroid_list[[i]], df_batch_detail$File_name[i],global_df_treat))
+        result_list = append(result_list,
+                              list(generate_merge_result(df_output_list[[i]],df_spheroid_list[[i]], df_batch_detail$File_name[i],global_df_treat)))
+        
+        # print(colnames(result_list[[i]]))
+      }
+      
+      full_data = Reduce(function(x,y) {merge(x,y,all = TRUE)}, result_list)
+      
+      print(colnames(full_data))
+      full_data_A  <- full_data[with(full_data , order(ETST.d, T_I)),]
+      full_data_B <- full_data_A
+      
+      
+      # print(full_data_A)
+      # full_data_B$Date_Treated <- as.POSIXct(full_data_A$Date_Treated, format = "%Y-%m-%d %H:%M:%S")
+      # full_data_B$Date_Scanned <- as.POSIXct(full_data_A$Date_Scanned, format = "%Y-%m-%d %H:%M:%S")
+      # print(full_data_B)
+      
+      #option to save CSV, rem out for now..
+      #write.csv(full_data_A,merge_output_file )
+      
+      #CSV merge file written
+      ###################################
+      ## start writing merge data to formatted xlsx file
+      
+      #  create formatting styles
+      datastyleC <- createStyle(fontSize = 10, fontColour = rgb(0,0,0),halign = "center", valign = "center")
+      datastyleR <- createStyle(fontSize = 10, fontColour = rgb(0,0,0), halign = "right", valign = "center")
+      datastyleL <- createStyle(fontSize = 10, fontColour = rgb(0,0,0), halign = "left", valign = "center")
+      
+      styleCentre <- createStyle(halign = "center", valign = "center")
+      
+      datestyle <- createStyle(numFmt = "hh:mm  dd-mmm-yyyyy")
+      dpstyle <- createStyle(halign = "right", valign = "center", numFmt = "0.0000")
+      
+      
+      
+      wb_mergedata <- createWorkbook()
+      addWorksheet(wb_mergedata , "Merged data", gridLines = FALSE)
+      
+      writeDataTable(wb_mergedata, 1, full_data_B, startRow = 1, startCol = 1, tableStyle = "TableStyleLight8",  rowNames = FALSE, keepNA = FALSE)
+      maxrows <-nrow(full_data_A)+1
+      
+      
+      addStyle(wb_mergedata, sheet = 1, datestyle, rows = 2:maxrows , cols = c(22,23), gridExpand = TRUE)
+      
+      addStyle(wb_mergedata, sheet = 1, dpstyle, rows = 2:maxrows , cols = c( 3:12,24:25), gridExpand = TRUE)
+      
+      addStyle(wb_mergedata, sheet = 1, datastyleC, rows = 2:maxrows , cols = c(1,13:21, 24,25), gridExpand = TRUE)
+      addStyle(wb_mergedata, sheet = 1, datastyleC, rows = 1 , cols = c(1:26), gridExpand = TRUE)
+      
+      addStyle(wb_mergedata, sheet = 1, datastyleR, rows = 2:maxrows , cols = c(3:12), gridExpand = TRUE)
+      
+      
+      setColWidths(wb_mergedata, sheet = 1, cols = c(3:12, 24:25), widths = 16 )
+      setColWidths(wb_mergedata, sheet = 1, cols = c(13:21), widths = 10 )
+      setColWidths(wb_mergedata, sheet = 1, cols = c(22, 23), widths = 24 )
+      
+      setColWidths(wb_mergedata, sheet = 1, cols = 26, widths = 30 )
+      setColWidths(wb_mergedata, sheet = 1, cols = 2, widths = 20)
+      
+      
+      freezePane(wb_mergedata, sheet = 1,  firstActiveRow = 2)
+      
+      #  Save outlier analysis report , 
+      return(wb_mergedata)
+      
+      
+    }
+    
+    output$downloadMerge_btn <- downloadHandler(
+      filename = function() {
+        paste("merged_report.xlsx", sep = "")
+      },
+      content = function(file) {
+        
+        
+        
+        saveWorkbook(merge_results(), file, overwrite = TRUE)
+        # write.csv(df_temp,file)
         # saveWorkbook(global_wb, file, overwrite = TRUE)
         
       }
