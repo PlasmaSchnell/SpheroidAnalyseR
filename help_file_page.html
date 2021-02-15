@@ -1,0 +1,24 @@
+<!-- #######  YAY, I AM THE SOURCE EDITOR! #########-->
+<h1 style="color: #5e9ca0;">User Manual</h1>
+<h2>Data input</h2>
+<p>Three types of files need to be uploaded.</p>
+<ul>
+<li>Raw data files: Single or multiple files can be uploaded</li>
+<li>The plate layout file: One file that defines the plate layout.</li>
+<li>The Treatment file: One file that defines the treatment.</li>
+</ul>
+<p><span style="color: #ff0000;">Note</span>: please download templates for these files and check that the column names of your files match the templates&rsquo; column names.</p>
+<p>Previewing files in the main panel:</p>
+<ul>
+<li>Raw files can be previewed (first three entries). A selection box is used for selecting different raw files if there are multiple raw files.</li>
+<li>Treatment and layout can be viewed after both treatment and layout files have been uploaded. Users can view the plot of cells vs the selected value.</li>
+</ul>
+<h2>Outlier removal</h2>
+<p>Choose the focal raw file in the selection panel for the outlier removal process.</p>
+<p>Users can set Robust Z-score, whether using pre-screen thresholds and pre-screen thresholds.</p>
+<p>After clicking the &lt;Remove outliers&gt; button, outliers will be removed and plots will be displayed on the main panel. Plots can be viewed with the selected measurement (e.g. diameter, area, etc.).</p>
+<p>Users can manually override cell results by selecting cells. The result of a selected cell will be toggled after applying the manual override (e.g. an outlier cell will be converted to a non-outlier cell).</p>
+<p>The report of the selected file can be downloaded by clicking the &lt;download&gt; button.</p>
+<h2>Merging</h2>
+<p>A table of raw files will be shown on the main panel after uploading raw data files. The second column (column name: Processed) shows whether the file has gone through the outlier removal. The rest of the columns show the configuration (e.g. robust z score value) used in outlier removal.</p>
+<p><strong>Merged file</strong> and <strong>overall configuration</strong> are only available after all raw files have been processed.</p>

@@ -1020,7 +1020,8 @@ ui <- navbarPage("SpheroidAnalyseR",
            h2("Preview the data"),    
            selectInput("select_file_preview",label="Choose a raw file to preview",
                        list()),
-           tableOutput("data_preview"), 
+           # tableOutput("data_preview"), 
+           DT::dataTableOutput("data_preview"),
 
            h2("Show the treatment groups on the plate"),
            selectInput("select_treatment",label="Choose the value to view the layout",
@@ -1029,7 +1030,7 @@ ui <- navbarPage("SpheroidAnalyseR",
         )
     )
     ),
-    tabPanel("Outliers",
+    tabPanel("Outlier Removal",
              sidebarLayout(
 
                
@@ -1098,8 +1099,14 @@ ui <- navbarPage("SpheroidAnalyseR",
              ) 
     ),
     
-    tabPanel("Merge",
-             sidebarPanel(downloadButton("downloadMerge_btn", "Download the merged file")),
+    tabPanel("Merging",
+             sidebarPanel(
+               
+               h3("Only available when all files have been processed"),
+               downloadButton("downloadMerge_btn", "Download the merged file"),
+               h2(""),
+               downloadButton("downloadConfig_btn", "Download the config file")),
+             
              mainPanel(
                DT::dataTableOutput("merge_file")
                # tableOutput("merge_file")
@@ -1121,7 +1128,8 @@ ui <- navbarPage("SpheroidAnalyseR",
 # Define server logic required to draw a histogram
 server <- function(input, output,session) {
     
-  
+    shinyjs::disable("downloadMerge_btn")
+    shinyjs::disable("downloadConfig_btn")
     df_output <- NULL
     df_origin<-NULL
 
@@ -1169,29 +1177,50 @@ server <- function(input, output,session) {
     df_origin_list <- FALSE
     df_spheroid_list <- FALSE
     
-    output$data_preview <- renderTable(
-        {
-          
-
-          file <- input$raw_data
-          name_id = which(file$name == input$select_file_preview)
-          print(input$select_file_preview)
-          print(file$datapath[name_id])
-          if(!is.null(file)){
-              ext <- tools::file_ext(file$datapath[name_id])
-              req(file)
-              validate(need(ext == "xlsx","Please upload an xlsx file"))
-              data <- readxl::read_xlsx(file$datapath[name_id])
-              head(data, n=3)
-          }
-          
-          
-        # data <- readRawData()
-        # if(!is.null(data))
-        #     head(data, n=3)
+    output$data_preview <- DT::renderDataTable(
+      {
+        file <- input$raw_data
+        name_id = which(file$name == input$select_file_preview)
+        print(input$select_file_preview)
+        print(file$datapath[name_id])
+        if(!is.null(file)){
+          ext <- tools::file_ext(file$datapath[name_id])
+          req(file)
+          validate(need(ext == "xlsx","Please upload an xlsx file"))
+          data <- readxl::read_xlsx(file$datapath[name_id])
+          DT::datatable(
+            head(data, n=3),
+            options = list(scrollX = TRUE))
         }
+        
 
+      }
     )
+    
+    
+    # output$data_preview <- renderTable(
+    #     {
+    #       
+    # 
+    #       file <- input$raw_data
+    #       name_id = which(file$name == input$select_file_preview)
+    #       print(input$select_file_preview)
+    #       print(file$datapath[name_id])
+    #       if(!is.null(file)){
+    #           ext <- tools::file_ext(file$datapath[name_id])
+    #           req(file)
+    #           validate(need(ext == "xlsx","Please upload an xlsx file"))
+    #           data <- readxl::read_xlsx(file$datapath[name_id])
+    #           head(data, n=3)
+    #       }
+    #       
+    #       
+    #     # data <- readRawData()
+    #     # if(!is.null(data))
+    #     #     head(data, n=3)
+    #     }
+    # 
+    # )
 
     
     
@@ -1754,7 +1783,10 @@ server <- function(input, output,session) {
       
       df_batch_detail<<-df_temp_batch_detail
       
-
+      if(all(df_batch_detail$Processed)){
+        shinyjs::enable("downloadMerge_btn")
+        shinyjs::enable("downloadConfig_btn")
+      }
       
       # global_wb <<- gen_report(Sph_Treat_Robz_ADVPC=Sph_Treat_Robz_ADVPC,
       #                          df_treat = df_treat,df_setup = df_setup,
@@ -2164,6 +2196,20 @@ server <- function(input, output,session) {
         
         
         saveWorkbook(merge_results(), file, overwrite = TRUE)
+        # write.csv(df_temp,file)
+        # saveWorkbook(global_wb, file, overwrite = TRUE)
+        
+      }
+    )
+    
+    output$downloadConfig_btn <- downloadHandler(
+      filename = function() {
+        paste("overall_config.csv", sep = "")
+      },
+      content = function(file) {
+        
+        
+        write.csv(df_batch_detail, file)
         # write.csv(df_temp,file)
         # saveWorkbook(global_wb, file, overwrite = TRUE)
         
