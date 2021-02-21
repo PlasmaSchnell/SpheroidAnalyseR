@@ -2089,9 +2089,10 @@ server <- function(input, output,session) {
         paste( "template_layout.csv", sep = "")
       },
       content = function(file) {
-        df_temp = read.csv("template_layout.csv")
+        df_temp = read.csv("template_layout.csv",
+                           , row.names = 1,header=TRUE, check.names = FALSE)
         
-        write.csv(df_temp,file)
+        write.csv(df_temp,file,na="")
         # saveWorkbook(global_wb, file, overwrite = TRUE)
         
       }
@@ -2103,9 +2104,11 @@ server <- function(input, output,session) {
         paste( "template_treatment.csv", sep = "")
       },
       content = function(file) {
-        df_temp = read.csv("template_treatment.csv")
+        df_temp = read.csv("template_treatment.csv",
+                           header=TRUE)
         
-        write.csv(df_temp,file)
+        write.csv(df_temp,file,
+                  na="",row.names=FALSE)
         # saveWorkbook(global_wb, file, overwrite = TRUE)
         
       }
