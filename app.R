@@ -17,6 +17,49 @@ library(writexl)
 library(ggpubr)
 library(shiny)
 library(shinyjs)
+####### Check file formats ######
+check_layout = function(df){
+  error_message=c("Check if the layout is 8x12 (row names and column names excluded)",
+                  "Column names error, please refer to the template",
+                  "Row names error, please refer to the template")
+  
+  dim_check = all(dim(df) == c(8,12))
+  
+  colnames_check = tryCatch( all(colnames(df) == as.character(1:12)), error = function(e){F})
+  rownames_check = tryCatch( all(row.names(df) ==c("A", "B", "C", "D",
+                                                   "E", "F", "G", "H")), error = function(e){F})
+  type_check = tryCatch( all(sapply(df, typeof) == "integer" |sapply(df, typeof) == "logical"),
+                         error = function(e){F})
+  
+  error_list = c(dim_check, colnames_check, rownames_check,type_check)
+  return(error_list)
+}
+
+
+check_treatment = function(df){
+  error_message=c("Check if the layout is 8x12 (row names and column names excluded)",
+                  "Column names error, please refer to the template",
+                  "Row names error, please refer to the template")
+  
+  dim_check = all(dim(df) == c(6,8))
+  colnames_check = colnames_check = tryCatch( all(colnames(df) == c("Index", "Treatment.Label",
+                                                                    "Time_Date", "Cell_line",
+                                                                    "Passage_No", "Radiation_dosage",
+                                                                    "Drug_1", "Conc_1"))
+                                              , error = function(e){F})
+  
+  rownames_check = tryCatch(all(row.names(df) ==as.character(1:6)), error = function(e){F})
+  
+  type_check = tryCatch(all(sapply(df, typeof) == c("integer","character","character","character","integer","integer","character","integer")),
+                        error = function(e){F})
+  
+  
+  error_list = c(dim_check, colnames_check, rownames_check,type_check)
+  return(error_list)
+}
+
+
+
 #######Predefine functions ######
 
 cbind.fill <- function(...) {                                                                                                                                                       
@@ -1001,16 +1044,20 @@ value_selections = list("Area", "Diameter", "Volume", "Perimeter" , "Circularity
 
 # Define UI for application that draws a histogram
 ui <- navbarPage("SpheroidAnalyseR",
-                             
+
       # Application title
     tabPanel("Data Input",
 
     # Sidebar with a slider input for number of bins 
     sidebarLayout(
         sidebarPanel(
+          tags$head(tags$style(".shiny-output-error{color: red;font-weight: bold;}")),
           fileInput(inputId = "raw_data","Choose Raw Data",accept=".xlsx",buttonLabel = "Browse", multiple = TRUE),
           fileInput(inputId = "layout","Choose Plate Layout",accept=".csv",buttonLabel="Browse"),
+          textOutput("text_layout"),
+          
           fileInput(inputId = "treat_data","Choose Treatment Definitions",accept=".csv",buttonLabel="Browse"),
+          textOutput("text_treat"),
           downloadButton("downloadRawTemplate_btn", "Download the raw data template"),
           downloadButton("downloadLayoutTemplate_btn", "Download the plate layout template"),
           downloadButton("downloadTreatTemplate_btn", "Download the treatment template")
@@ -1177,98 +1224,30 @@ server <- function(input, output,session) {
     df_origin_list <- FALSE
     df_spheroid_list <- FALSE
     
-    output$data_preview <- DT::renderDataTable(
-      {
-        file <- input$raw_data
-        name_id = which(file$name == input$select_file_preview)
-        print(input$select_file_preview)
-        print(file$datapath[name_id])
-        if(!is.null(file)){
-          ext <- tools::file_ext(file$datapath[name_id])
-          req(file)
-          validate(need(ext == "xlsx","Please upload an xlsx file"))
-          data <- readxl::read_xlsx(file$datapath[name_id])
-          DT::datatable(
-            head(data, n=3),
-            options = list(scrollX = TRUE))
-        }
-        
-
-      }
-    )
     
+    #### input panel ####
     
-    # output$data_preview <- renderTable(
-    #     {
-    #       
-    # 
-    #       file <- input$raw_data
-    #       name_id = which(file$name == input$select_file_preview)
-    #       print(input$select_file_preview)
-    #       print(file$datapath[name_id])
-    #       if(!is.null(file)){
-    #           ext <- tools::file_ext(file$datapath[name_id])
-    #           req(file)
-    #           validate(need(ext == "xlsx","Please upload an xlsx file"))
-    #           data <- readxl::read_xlsx(file$datapath[name_id])
-    #           head(data, n=3)
-    #       }
-    #       
-    #       
-    #     # data <- readRawData()
-    #     # if(!is.null(data))
-    #     #     head(data, n=3)
-    #     }
-    # 
-    # )
-
-    
-    
-
-        
- 
-    
-    # readRawData <- reactive({
-    # 
-    #     file <- input$raw_data
-    # 
-    #     ori_filename = input$raw_data$name
-    #     if(!is.null(file)){
-    #         for (datapath in file$datapath){
-    #           ext <- tools::file_ext(file$datapath)
-    #           req(file)
-    #           validate(need(ext == "xlsx","Please upload an xlsx file"))
-    #         }
-    #       
-    #       updateSelectInput(session, "select_file_preview",
-    #                         choices = ori_filename,
-    #                         selected = head(ori_filename, 1))
-    #         # 
-    #         # ext <- tools::file_ext(file$datapath)
-    #         # req(file)
-    #         # validate(need(ext == "xlsx","Please upload an xlsx file"))
-    #         # data <- readxl::read_xlsx(file$datapath)
-    #     }
-    # 
-    # })
-    
-    
+    ## Read the raw file (first file if multiple files have been uploaded)
+    ## event: Upload raw file
     observeEvent(input$raw_data, {
       
       file <- input$raw_data
       
-      
+      ## validate the file path is correct
       if(!is.null(file)){
         for (datapath in file$datapath){
           ext <- tools::file_ext(file$datapath)
           req(file)
           validate(need(ext == "xlsx","Please upload an xlsx file"))
         }
+        
+      ## validate the file is correct  
+        
       
       # get the original file names
       ori_filename = input$raw_data$name
       
-      #
+      # Create selections for raw files in both input and outlier removal panels.
       updateSelectInput(session, "select_file_preview",
                         choices = ori_filename,
                         selected = head(ori_filename, 1))
@@ -1277,6 +1256,7 @@ server <- function(input, output,session) {
                         choices = ori_filename,
                         selected = head(ori_filename, 1))
       
+      ##initial the variables and UI for merging
       df_batch_detail<<-data.frame(File_name=ori_filename, Processed=rep(c(FALSE), times = length(ori_filename)),
                                    Robust_Z_Low_Limit=NA,
                                    Robust_Z_Upper_Limit= NA,
@@ -1303,92 +1283,56 @@ server <- function(input, output,session) {
           DT::datatable(
             df_batch_detail,
             options = list(scrollX = TRUE))})
+      ##
       
       }
     })
     
-    readLayout <- reactive({
-        layout_file <- input$layout
-        
-        if(!is.null(layout_file)){
-            ext <- tools::file_ext(layout_file$datapath)
-            req(layout_file)
-            validate(need(ext == "csv","Please upload a layout in csv format"))
-            layout <- readr::read_csv(layout_file$datapath)  %>% 
-            #     #layout <- readr::read_csv("layout_example.csv") %>% 
-                dplyr::rename("Row"=X1) %>%
-                tidyr::pivot_longer(-Row,names_to="Col",
-                                    values_to="Index") %>%
-                mutate(Index = as.factor(Index),Col=as.numeric(Col)) %>%
-                filter(!is.na(Row))
-            
-            df_plot_layout <<- layout
-            layout
-        }
-    }
-    )
-    
-    readTreatment <- reactive({
-        treat_file <- input$treat_data
-        ## TO DO: Need to check that 1st column is named Index
-        if(!is.null(treat_file)){
-            ext <- tools::file_ext(treat_file$datapath)
-            req(treat_file)
-            validate(need(ext == "csv","Please upload a layout in csv format"))
-            treatments <- readr::read_csv(treat_file$datapath) %>% 
-                mutate_all(as.factor)
-            # update the value for treatment
-            selections = colnames(treatments)
-            updateSelectInput(session, "select_treatment",
-                              choices = selections,
-                              selected = head(selections, 1))
-            
-            df_plot_treat<<-treatments
-            treatments
-            
-        }
-    }
-    )
-    
-    draw_layout<-function(df_layout){
-      df_layout$Well.Name = paste0(df_layout$Row,df_layout$Col)
-      ggplot(df_layout, aes(x = Row, y = Col, label=Well.Name)) +
-        geom_tile() +
-        geom_text() +
-        scale_y_continuous(breaks=1:12)
-    }
-    draw_layout_with_treat <-function(df_layout, df_treat, value){
-      layout <- left_join(df_layout,df_treat)
-      layout$Well.Name = paste0(layout$Row,layout$Col)
-      
-      ggplot(layout, aes_string(x = "Row", y = "Col",fill=value,label="Well.Name")) +
-        geom_tile() +
-        scale_y_continuous(breaks=1:12)+ geom_text()
-      
-    }
-    output$show_layout <- renderPlot(
+    ## update the raw data preview in the input panel
+    ## event: After uploading the raw data
+    output$data_preview <- DT::renderDataTable(
       {
-        if(!is.null(df_plot_layout)){
-          if(!is.null(df_plot_treat)){
-            draw_layout_with_treat(df_plot_layout, df_plot_treat, input$select_treatment)
-          }
-        else{
-          draw_layout(df_plot_layout)
-        }
-
+        file <- input$raw_data
+        name_id = which(file$name == input$select_file_preview)
+        print(input$select_file_preview)
+        print(file$datapath[name_id])
+        if(!is.null(file)){
+          ext <- tools::file_ext(file$datapath[name_id])
+          req(file)
+          validate(need(ext == "xlsx","Please upload an xlsx file"))
+          data <- readxl::read_xlsx(file$datapath[name_id])
+          DT::datatable(
+            head(data, n=3),
+            options = list(scrollX = TRUE))
         }
       }
     )
     
-    
-    observeEvent(input$layout, {
-      
+    ## read layout file
+    ## If treament file has been uploaded:
+    ##    draw layout vs treament variables plot in layout & treatment preview
+    ## else:
+    ##    only draw the layout in layout & treatment preview
+    ## event: After uploading the layout file
+    output$text_layout <- reactive({
       layout_file <- input$layout
       
       if(!is.null(layout_file)){
         ext <- tools::file_ext(layout_file$datapath)
         req(layout_file)
         validate(need(ext == "csv","Please upload a layout in csv format"))
+        
+        df_check = read.csv(layout_file$datapath,
+                            row.names = 1,header=TRUE, check.names = FALSE)
+        
+        error_list = check_layout(df_check)
+
+        validate(need(error_list[1] == TRUE,"Dimension error\nCheck if the file is 8x12 (row names and column names excluded)"))
+        validate(need(error_list[2] == TRUE,"Column names error\nplease refer to the template"))
+        validate(need(error_list[3] == TRUE,"Row names error\nplease refer to the template"))
+        validate(need(error_list[4] == TRUE,"Value error\nCheck values in the layout file"))
+        
+        
         layout <- readr::read_csv(layout_file$datapath)  %>% 
           #     #layout <- readr::read_csv("layout_example.csv") %>% 
           dplyr::rename("Row"=X1) %>%
@@ -1414,16 +1358,83 @@ server <- function(input, output,session) {
           }
         }
       )
-      
-    })
+      ""
+    }
+    )
     
-    observeEvent(input$treat_data, {
+    
+    # observeEvent(input$layout, {
+    #   layout_file <- input$layout
+    #   
+    #   if(!is.null(layout_file)){
+    #     ext <- tools::file_ext(layout_file$datapath)
+    #     req(layout_file)
+    #     validate(need(ext == "csv","Please upload a layout in csv format"))
+    #     
+    #     df_check = read.csv(layout_file$datapath,
+    #                    row.names = 1,header=TRUE, check.names = FALSE)
+    #     
+    #     error_list = check_layout(df_check)
+    #     print(error_list)
+    #     validate(need(error_list[1] == TRUE,"Check if the layout is 8x12 (row names and column names excluded)"))
+    #     validate(need(error_list[2] == TRUE,"Column names error, please refer to the template"))
+    #     validate(need(error_list[3] == TRUE,"Row names error, please refer to the template"))
+    #     validate(need(error_list[4] == TRUE,"Check values in the layout file"))
+    # 
+    #     
+    #     layout <- readr::read_csv(layout_file$datapath)  %>% 
+    #       #     #layout <- readr::read_csv("layout_example.csv") %>% 
+    #       dplyr::rename("Row"=X1) %>%
+    #       tidyr::pivot_longer(-Row,names_to="Col",
+    #                           values_to="Index") %>%
+    #       mutate(Index = as.factor(Index),Col=as.numeric(Col)) %>%
+    #       filter(!is.na(Row))
+    #     
+    #     df_plot_layout <<- layout
+    #     layout
+    #   }
+    #   
+    #   output$show_layout <- renderPlot(
+    #     {
+    #       if(!is.null(df_plot_layout)){
+    #         if(!is.null(df_plot_treat)){
+    #           draw_layout_with_treat(df_plot_layout, df_plot_treat, input$select_treatment)
+    #         }
+    #         else{
+    #           draw_layout(df_plot_layout)
+    #         }
+    #         
+    #       }
+    #     }
+    #   )
+    #   
+    # })
+    
+    ## read treament file
+    ## update the treatment variable selections
+    ## If layout file has been uploaded:
+    ##    draw layout vs treament variables plot in layout & treatment preview
+    ## event: After uploading the treatment file
+    
+    output$text_treat<- reactive({
       treat_file <- input$treat_data
       ## TO DO: Need to check that 1st column is named Index
       if(!is.null(treat_file)){
         ext <- tools::file_ext(treat_file$datapath)
         req(treat_file)
-        validate(need(ext == "csv","Please upload a layout in csv format"))
+        validate(need(ext == "csv","Please upload a treatment in csv format"))
+        
+        df_check = read.csv(treat_file$datapath,
+                     header=TRUE)
+        
+        error_list = check_treatment(df_check)
+        
+        validate(need(error_list[1] == TRUE,"Dimension error\nCheck if the file is 6x8 (row names and column names excluded)"))
+        validate(need(error_list[2] == TRUE,"Column names error\nplease refer to the template"))
+        validate(need(error_list[3] == TRUE,"Row names error\nplease refer to the template"))
+        validate(need(error_list[4] == TRUE,"Value error\nCheck values in the treatment file"))
+
+        
         treatments <- readr::read_csv(treat_file$datapath) %>% 
           mutate_all(as.factor)
         # update the value for treatment
@@ -1436,7 +1447,6 @@ server <- function(input, output,session) {
         treatments
         
       }
-      
       output$show_layout <- renderPlot(
         {
           if(!is.null(df_plot_layout)){
@@ -1450,12 +1460,67 @@ server <- function(input, output,session) {
           }
         }
       )
-      
+      ""
     })
     
-    #--- previewing data
+    # observeEvent(input$treat_data, {
+    #   treat_file <- input$treat_data
+    #   ## TO DO: Need to check that 1st column is named Index
+    #   if(!is.null(treat_file)){
+    #     ext <- tools::file_ext(treat_file$datapath)
+    #     req(treat_file)
+    #     validate(need(ext == "csv","Please upload a layout in csv format"))
+    #     treatments <- readr::read_csv(treat_file$datapath) %>% 
+    #       mutate_all(as.factor)
+    #     # update the value for treatment
+    #     selections = colnames(treatments)
+    #     updateSelectInput(session, "select_treatment",
+    #                       choices = selections,
+    #                       selected = head(selections, 1))
+    #     
+    #     df_plot_treat<<-treatments
+    #     treatments
+    #     
+    #   }
+    #   output$show_layout <- renderPlot(
+    #     {
+    #       if(!is.null(df_plot_layout)){
+    #         if(!is.null(df_plot_treat)){
+    #           draw_layout_with_treat(df_plot_layout, df_plot_treat, input$select_treatment)
+    #         }
+    #         else{
+    #           draw_layout(df_plot_layout)
+    #         }
+    #         
+    #       }
+    #     }
+    #   )
+    #   
+    # })
+    
+    ###functions for drawing layout & treatment preview
+    draw_layout<-function(df_layout){
+      df_layout$Well.Name = paste0(df_layout$Row,df_layout$Col)
+      ggplot(df_layout, aes(x = Row, y = Col, label=Well.Name)) +
+        geom_tile() +
+        geom_text() +
+        scale_y_continuous(breaks=1:12)
+    }
+    draw_layout_with_treat <-function(df_layout, df_treat, value){
+      layout <- left_join(df_layout,df_treat)
+      layout$Well.Name = paste0(layout$Row,layout$Col)
+      
+      ggplot(layout, aes_string(x = "Row", y = "Col",fill=value,label="Well.Name")) +
+        geom_tile() +
+        scale_y_continuous(breaks=1:12)+ geom_text()
+      
+    }
+    
+    
+    #### outlier removal panel ####
   
-    #### outlier removal #####
+    ## remove outliers of the selected raw file in the outlier removal panel
+    ## event: click the outlier removal button
     
     output_report <- eventReactive(input$outlier_btn, {
       validate(
@@ -1856,6 +1921,7 @@ server <- function(input, output,session) {
       #   draw_plot_2(df_output,input$select_view_value )
       # })
       
+    ## function for updating plots in the outlier removal panel
       update_plots = function(df, value){
         output$outlierPlot <- renderPlot({
           validate(need(df,"Please run the outlier removal"))
