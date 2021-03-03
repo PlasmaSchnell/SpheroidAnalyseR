@@ -17,6 +17,7 @@ library(writexl)
 library(ggpubr)
 library(shiny)
 library(shinyjs)
+library(DT)
 ####### Check file formats ######
 check_layout = function(df){
   error_message=c("Check if the layout is 8x12 (row names and column names excluded)",
@@ -258,6 +259,77 @@ draw_plot_2 = function(df, value){
     theme(plot.title = element_text(size = 10))
   
   
+}
+
+# help function for turning Sph_ADVPC to ADVPC_means
+Sph_ADVPC_2_ADVPC_means <-function(Sph_ADVPC,df_treat,Spheroid_data,rawfilename){
+  dropped_cols=setdiff(colnames(Sph_ADVPC), 
+                       intersect(colnames(Sph_ADVPC), colnames(df_treat)))
+  dropped_cols=c('T_I',dropped_cols)
+  Sph_ADVPC = Sph_ADVPC[, dropped_cols]
+  
+  # merge with treatment data
+  
+  Sph_ADVPC  <- merge(Sph_ADVPC, df_treat, by= "T_I")
+  
+  Sph_ADVPC <- Sph_ADVPC[with(Sph_ADVPC, order(Row, Col)),]
+  
+  Job_Info_data <- select(Spheroid_data, Jobrun.Finish.Time)
+  
+  Sph_ADVPC$Job.Date <- as.Date(Job_Info_data$Jobrun.Finish.Time, origin="1900-01-01")
+  
+  #work out time diff in days ETST.
+  
+  Sph_ADVPC$ETST.d <-  difftime(Sph_ADVPC$Job.Date, as.Date(Sph_ADVPC$Time_Date, "%m/%d/%Y", origin="1900-01-01"), units= "days")
+  Sph_ADVPC$ETST.h <-  difftime(Sph_ADVPC$Job.Date, as.Date(Sph_ADVPC$Time_Date, "%m/%d/%Y", origin="1900-01-01"), units= "hours")
+  
+  
+  
+  Sph_ADVPC$Filename <- rawfilename
+  Sph_ADVPCa <-  Sph_ADVPC
+  
+  # calculate Means and SE's for A D C V P items
+  
+  aArea_means <- data_summary_TI(Sph_ADVPCa, varname="Area_OR",
+                                 groupnames=c("T_I"))
+  aDiameter_means <- data_summary_TI(Sph_ADVPCa, varname="Diameter_OR",
+                                     groupnames=c("T_I"))
+  aCircularity_means <- data_summary_TI(Sph_ADVPCa, varname="Circularity_OR",
+                                        groupnames=c("T_I"))
+  
+  aVolume_means <- data_summary_TI(Sph_ADVPCa, varname="Volume_OR",
+                                   groupnames=c("T_I"))
+  
+  aPerimeter_means <- data_summary_TI(Sph_ADVPCa, varname="Perimeter_OR",
+                                      groupnames=c("T_I"))
+  
+  
+  #merge all mean+SE datasets sequentially
+  
+  a_allmeans <- merge(aArea_means, aDiameter_means, by= "T_I")
+  a_allmeans1 <- merge(a_allmeans, aCircularity_means, by= "T_I")
+  a_allmeans2 <- merge(a_allmeans1, aVolume_means, by= "T_I")
+  a_allmeans3 <- merge(a_allmeans2, aPerimeter_means, by= "T_I")
+  colnames(a_allmeans3)<- c("T_I", "Area_Mean","Area_SE","Diameter_Mean","Diameter_SE","Circularity_Mean",
+                            "Circularity_SE","Volume_Mean","Volume_SE", "Perimeter_Mean","Perimeter_SE" )
+  
+  ADVPC_means <- merge(a_allmeans3, df_treat, by= "T_I")
+  
+  job.date = Job_Info_data$Jobrun.Finish.Time[1]
+  ADVPC_means$Job.Date <- job.date
+  
+  # calculate time diff in days and hours ETST.
+  
+  ADVPC_means$ETST.d <-  as.numeric(difftime(ADVPC_means$Job.Date, as.Date(ADVPC_means$Time_Date, "%m/%d/%Y", origin="1900-01-01"), units= "days"))
+  ADVPC_means$ETST.h <-  as.numeric(difftime(ADVPC_means$Job.Date, as.Date(ADVPC_means$Time_Date, "%m/%d/%Y", origin="1900-01-01"), units= "hours"))
+  ADVPC_means$Filename <- rawfilename
+  
+  # ADVPC_means$Job.Date <- as.POSIXct(ADVPC_means$Job.Date, format = "%Y-%m-%d %H:%M:%S")
+
+  # ADVPC_means$Time_Date <- as.POSIXct(as.Date(ADVPC_means$Time_Date, "%m/%d/%Y", origin="1900-01-01"), format = "%Y-%m-%d %H:%M:%S")
+  
+  ADVPC_means <- ADVPC_means[with(ADVPC_means, order(T_I)),]
+  return(ADVPC_means)
 }
 
 ##### function for generating the report
@@ -673,82 +745,10 @@ gen_report = function(Sph_Treat_Robz_ADVPC,
   #Sph_ADVPC <- Sph_Treat_ADVPC[,c(1:4, 53:57)]
   Sph_ADVPC <- Sph_Treat_ADVPC
   
-  dropped_cols=setdiff(colnames(Sph_ADVPC), 
-                       intersect(colnames(Sph_ADVPC), colnames(df_treat)))
-  dropped_cols=c('T_I',dropped_cols)
-  Sph_ADVPC = Sph_ADVPC[, dropped_cols]
-
-  # merge with treatment data
-
-  Sph_ADVPC  <- merge(Sph_ADVPC, df_treat, by= "T_I")
+  ADVPC_means<-Sph_ADVPC_2_ADVPC_means(Sph_ADVPC,df_treat,Spheroid_data,rawfilename)
   
-  Sph_ADVPC <- Sph_ADVPC[with(Sph_ADVPC, order(Row, Col)),]
-  
-  Job_Info_data <- select(Spheroid_data, Jobrun.Finish.Time)
-
-  Sph_ADVPC$Job.Date <- as.Date(Job_Info_data$Jobrun.Finish.Time, origin="1900-01-01")
-  
-  #work out time diff in days ETST.
-
-  Sph_ADVPC$ETST.d <-  difftime(Sph_ADVPC$Job.Date, Sph_ADVPC$Time_Date, units= "days")
-  Sph_ADVPC$ETST.h <-  difftime(Sph_ADVPC$Job.Date, Sph_ADVPC$Time_Date, units= "hours")
-
-  
-
-  Sph_ADVPC$Filename <- rawfilename
-  Sph_ADVPCa <-  Sph_ADVPC
-  
-  # calculate Means and SE's for A D C V P items
-  
-  aArea_means <- data_summary_TI(Sph_ADVPCa, varname="Area_OR",
-                                 groupnames=c("T_I"))
-  
-  aDiameter_means <- data_summary_TI(Sph_ADVPCa, varname="Diameter_OR",
-                                     groupnames=c("T_I"))
-
-  aCircularity_means <- data_summary_TI(Sph_ADVPCa, varname="Circularity_OR",
-                                        groupnames=c("T_I"))
-
-
-  aVolume_means <- data_summary_TI(Sph_ADVPCa, varname="Volume_OR",
-                                   groupnames=c("T_I"))
-
-
-  aPerimeter_means <- data_summary_TI(Sph_ADVPCa, varname="Perimeter_OR",
-                                      groupnames=c("T_I"))
-
-  
-  #merge all mean+SE datasets sequentially
-  
-  a_allmeans <- merge(aArea_means, aDiameter_means, by= "T_I")
-  a_allmeans1 <- merge(a_allmeans, aCircularity_means, by= "T_I")
-  a_allmeans2 <- merge(a_allmeans1, aVolume_means, by= "T_I")
-  a_allmeans3 <- merge(a_allmeans2, aPerimeter_means, by= "T_I")
-  colnames(a_allmeans3)<- c("T_I", "Area_Mean","Area_SE","Diameter_Mean","Diameter_SE","Circularity_Mean",
-                            "Circularity_SE","Volume_Mean","Volume_SE", "Perimeter_Mean","Perimeter_SE" )
-
-  #subset TI and treatment items from main dataset
-
-
-  #merge final means dataset with Treatment data items
-
-  
-  ADVPC_means <- merge(a_allmeans3, df_treat, by= "T_I")
-
-  job.date = Job_Info_data$Jobrun.Finish.Time[1]
-  ADVPC_means$Job.Date <- job.date
-
-  # calculate time diff in days and hours ETST.
-
-  ADVPC_means$ETST.d <-  as.numeric(difftime(ADVPC_means$Job.Date, ADVPC_means$Time_Date, units= "days"))
-  ADVPC_means$ETST.h <-  as.numeric(difftime(ADVPC_means$Job.Date, ADVPC_means$Time_Date, units= "hours"))
-  ADVPC_means$Filename <- rawfilename
-
-
-
-  ADVPC_means <- ADVPC_means[with(ADVPC_means, order(T_I)),]
-
-  
+  print(ADVPC_means$Time_Date)
+  print(ADVPC_means$Job.Date)
   ### use ADVPC_means to generate merge file
   if (TF_copytomergedir == 'TRUE')
   {
@@ -770,7 +770,11 @@ gen_report = function(Sph_Treat_Robz_ADVPC,
   addStyle(wb, sheet = 12, datastyleC, rows = 2:33 , cols = c(13:21), gridExpand = TRUE)
   addStyle(wb, sheet = 12, datastyleR, rows = 2:33 , cols = c(3:12,24:26), gridExpand = TRUE)
 
-  addStyle(wb, sheet = 12, datestyle, rows = 2:33 , cols = c(22,23), gridExpand = TRUE)
+  #
+  # addStyle(wb, sheet = 12, datestyle, rows = 2:33 , cols = c(22,23), gridExpand = TRUE)
+  addStyle(wb, sheet = 12, datestyle, rows = 2:33 , cols = c(which(colnames(df_excel)=="Job.Date"),
+                                                             which(colnames(df_excel)=="Time_Date")), gridExpand = TRUE)
+  
   addStyle(wb, sheet = 12, dpstyle, rows = 2:33 , cols = c( 3:12,24:25), gridExpand = TRUE)
 
   addStyle(wb, sheet = 12, datastyleC, rows = 2:33 , cols = 1, gridExpand = TRUE)
@@ -950,84 +954,83 @@ generate_merge_result = function(df,Spheroid_data, rawfilename,df_treat){
   Sph_Treat_ADVPC <- df[with(df, order(T_I)),]
   
   Sph_ADVPC <- Sph_Treat_ADVPC
-
+  ADVPC_means<-Sph_ADVPC_2_ADVPC_means(Sph_ADVPC,df_treat,Spheroid_data,rawfilename)
   
-  dropped_cols=setdiff(colnames(Sph_ADVPC), 
-                       intersect(colnames(Sph_ADVPC), colnames(df_treat)))
-  dropped_cols=c('T_I',dropped_cols)
-  Sph_ADVPC = Sph_ADVPC[, dropped_cols]
-  
-  
-  # merge with treatment data
-  
-  Sph_ADVPC  <- merge(Sph_ADVPC, df_treat, by= "T_I")
-  
-  Sph_ADVPC <- Sph_ADVPC[with(Sph_ADVPC, order(Row, Col)),]
-  
-  Job_Info_data <- select(Spheroid_data, Jobrun.Finish.Time)
-  
-  Sph_ADVPC$Job.Date <- as.Date(Job_Info_data$Jobrun.Finish.Time, origin="1900-01-01")
-  
-  #work out time diff in days ETST.
-  
-  Sph_ADVPC$ETST.d <-  difftime(Sph_ADVPC$Job.Date, Sph_ADVPC$Time_Date, units= "days")
-  Sph_ADVPC$ETST.h <-  difftime(Sph_ADVPC$Job.Date, Sph_ADVPC$Time_Date, units= "hours")
-  
-  
-  
-  Sph_ADVPC$Filename <- rawfilename
-  Sph_ADVPCa <-  Sph_ADVPC
-  
-  # calculate Means and SE's for A D C V P items
-  
-  aArea_means <- data_summary_TI(Sph_ADVPCa, varname="Area_OR",
-                                 groupnames=c("T_I"))
-  
-  aDiameter_means <- data_summary_TI(Sph_ADVPCa, varname="Diameter_OR",
-                                     groupnames=c("T_I"))
-  
-  aCircularity_means <- data_summary_TI(Sph_ADVPCa, varname="Circularity_OR",
-                                        groupnames=c("T_I"))
-  
-  
-  aVolume_means <- data_summary_TI(Sph_ADVPCa, varname="Volume_OR",
-                                   groupnames=c("T_I"))
-  
-  
-  aPerimeter_means <- data_summary_TI(Sph_ADVPCa, varname="Perimeter_OR",
-                                      groupnames=c("T_I"))
-  
-  
-  #merge all mean+SE datasets sequentially
-  a_allmeans <- merge(aArea_means, aDiameter_means, by= "T_I")
-  a_allmeans1 <- merge(a_allmeans, aCircularity_means, by= "T_I")
-  a_allmeans2 <- merge(a_allmeans1, aVolume_means, by= "T_I")
-  a_allmeans3 <- merge(a_allmeans2, aPerimeter_means, by= "T_I")
-  colnames(a_allmeans3)<- c("T_I", "Area_Mean","Area_SE","Diameter_Mean","Diameter_SE","Circularity_Mean",
-                            "Circularity_SE","Volume_Mean","Volume_SE", "Perimeter_Mean","Perimeter_SE" )
-  
-  #subset TI and treatment items from main dataset
-
-  #merge final means dataset with Treatment data items
-  ADVPC_means <- merge(a_allmeans3, df_treat, by= "T_I")
-  
-  job.date = Job_Info_data$Jobrun.Finish.Time[1]
-  ADVPC_means$Job.Date <- job.date
-  
-  # calculate time diff in days and hours ETST.
-  
-  ADVPC_means$ETST.d <-  as.numeric(difftime(ADVPC_means$Job.Date, ADVPC_means$Time_Date, units= "days"))
-  ADVPC_means$ETST.h <-  as.numeric(difftime(ADVPC_means$Job.Date, ADVPC_means$Time_Date, units= "hours"))
-  ADVPC_means$Filename <- rawfilename
-  
-  print(names(ADVPC_means))
-  print(names(ADVPC_means)[13])
-  print(names(ADVPC_means)[23])
-  # names(ADVPC_means)[13] <- "Date_Treated"
-  # names(ADVPC_means)[23] <- "Date_Scanned"
-  # ADVPC_means <-  ADVPC_means[,c(1,12, 2:11,14:22, 13, 23:26)]
-  
-  ADVPC_means <- ADVPC_means[with(ADVPC_means, order(T_I)),]
+  # ADVPC_means<-Sph_ADVPC_2_ADVPC_means(Sph_ADVPC,df_treat,Spheroid_data)
+  # 
+  # dropped_cols=setdiff(colnames(Sph_ADVPC), 
+  #                      intersect(colnames(Sph_ADVPC), colnames(df_treat)))
+  # dropped_cols=c('T_I',dropped_cols)
+  # Sph_ADVPC = Sph_ADVPC[, dropped_cols]
+  # 
+  # 
+  # # merge with treatment data
+  # 
+  # Sph_ADVPC  <- merge(Sph_ADVPC, df_treat, by= "T_I")
+  # 
+  # Sph_ADVPC <- Sph_ADVPC[with(Sph_ADVPC, order(Row, Col)),]
+  # 
+  # Job_Info_data <- select(Spheroid_data, Jobrun.Finish.Time)
+  # 
+  # Sph_ADVPC$Job.Date <- as.Date(Job_Info_data$Jobrun.Finish.Time, origin="1900-01-01")
+  # 
+  # #work out time diff in days ETST.
+  # 
+  # Sph_ADVPC$ETST.d <-  difftime(Sph_ADVPC$Job.Date, as.Date(Sph_ADVPC$Time_Date, "%m/%d/%Y", origin="1900-01-01"), units= "days")
+  # Sph_ADVPC$ETST.h <-  difftime(Sph_ADVPC$Job.Date, as.Date(Sph_ADVPC$Time_Date, "%m/%d/%Y", origin="1900-01-01"), units= "hours")
+  # 
+  # 
+  # 
+  # Sph_ADVPC$Filename <- rawfilename
+  # Sph_ADVPCa <-  Sph_ADVPC
+  # 
+  # # calculate Means and SE's for A D C V P items
+  # 
+  # aArea_means <- data_summary_TI(Sph_ADVPCa, varname="Area_OR",
+  #                                groupnames=c("T_I"))
+  # 
+  # aDiameter_means <- data_summary_TI(Sph_ADVPCa, varname="Diameter_OR",
+  #                                    groupnames=c("T_I"))
+  # 
+  # aCircularity_means <- data_summary_TI(Sph_ADVPCa, varname="Circularity_OR",
+  #                                       groupnames=c("T_I"))
+  # 
+  # 
+  # aVolume_means <- data_summary_TI(Sph_ADVPCa, varname="Volume_OR",
+  #                                  groupnames=c("T_I"))
+  # 
+  # 
+  # aPerimeter_means <- data_summary_TI(Sph_ADVPCa, varname="Perimeter_OR",
+  #                                     groupnames=c("T_I"))
+  # 
+  # 
+  # #merge all mean+SE datasets sequentially
+  # a_allmeans <- merge(aArea_means, aDiameter_means, by= "T_I")
+  # a_allmeans1 <- merge(a_allmeans, aCircularity_means, by= "T_I")
+  # a_allmeans2 <- merge(a_allmeans1, aVolume_means, by= "T_I")
+  # a_allmeans3 <- merge(a_allmeans2, aPerimeter_means, by= "T_I")
+  # colnames(a_allmeans3)<- c("T_I", "Area_Mean","Area_SE","Diameter_Mean","Diameter_SE","Circularity_Mean",
+  #                           "Circularity_SE","Volume_Mean","Volume_SE", "Perimeter_Mean","Perimeter_SE" )
+  # 
+  # #subset TI and treatment items from main dataset
+  # 
+  # #merge final means dataset with Treatment data items
+  # ADVPC_means <- merge(a_allmeans3, df_treat, by= "T_I")
+  # 
+  # job.date = Job_Info_data$Jobrun.Finish.Time[1]
+  # ADVPC_means$Job.Date <- job.date
+  # 
+  # # calculate time diff in days and hours ETST.
+  # 
+  # ADVPC_means$ETST.d <-  as.numeric(difftime(ADVPC_means$Job.Date, as.Date(ADVPC_means$Time_Date, "%m/%d/%Y", origin="1900-01-01"), units= "days"))
+  # ADVPC_means$ETST.h <-  as.numeric(difftime(ADVPC_means$Job.Date, as.Date(ADVPC_means$Time_Date, "%m/%d/%Y", origin="1900-01-01"), units= "hours"))
+  # ADVPC_means$Filename <- rawfilename
+  # 
+  # # names(ADVPC_means)[13] <- "Date_Treated"
+  # # names(ADVPC_means)[23] <- "Date_Scanned"
+  # # ADVPC_means <-  ADVPC_means[,c(1,12, 2:11,14:22, 13, 23:26)]
+  # 
+  # ADVPC_means <- ADVPC_means[with(ADVPC_means, order(T_I)),]
 
   return(ADVPC_means)  
 }
@@ -1053,6 +1056,7 @@ ui <- navbarPage("SpheroidAnalyseR",
         sidebarPanel(
           tags$head(tags$style(".shiny-output-error{color: red;font-weight: bold;}")),
           fileInput(inputId = "raw_data","Choose Raw Data",accept=".xlsx",buttonLabel = "Browse", multiple = TRUE),
+          
           fileInput(inputId = "layout","Choose Plate Layout",accept=".csv",buttonLabel="Browse"),
           textOutput("text_layout"),
           
@@ -1064,9 +1068,11 @@ ui <- navbarPage("SpheroidAnalyseR",
         ),
         # Show a plot of the generated distribution
         mainPanel(
+          DT::dataTableOutput('x1'),
            h2("Preview the data"),    
            selectInput("select_file_preview",label="Choose a raw file to preview",
                        list()),
+           
            # tableOutput("data_preview"), 
            DT::dataTableOutput("data_preview"),
 
@@ -1150,12 +1156,29 @@ ui <- navbarPage("SpheroidAnalyseR",
              sidebarPanel(
                
                h3("Only available when all files have been processed"),
+               
+               checkboxInput("processed_file_chk","Use previous reports",value = FALSE),
+               
+               # checkboxInput("override","Apply Manual overrides?",value = FALSE),
+
+               conditionalPanel(condition ="input.processed_file_chk==1",
+                                #- Values above zero
+                                fileInput(inputId = "processed_data","Choose previous reports",accept=".xlsx",buttonLabel = "Browse", multiple = TRUE),
+                                textOutput("text_processed")
+               ),
+               
+               
+               textInput("mergeName_text", "Merged file name", value = paste0("merge_file_", Sys.Date(),".xlsx")),
                downloadButton("downloadMerge_btn", "Download the merged file"),
                h2(""),
+               textInput("configName_text", "Config file name", value = paste0("config_file_", Sys.Date(),".csv")),
                downloadButton("downloadConfig_btn", "Download the config file")),
              
              mainPanel(
-               DT::dataTableOutput("merge_file")
+               h2("Raw files"),
+               DT::dataTableOutput("merge_file"),
+               h2("Previous reports"),
+               DT::dataTableOutput("processed_data_table")
                # tableOutput("merge_file")
                
              )
@@ -1177,6 +1200,9 @@ server <- function(input, output,session) {
     
     shinyjs::disable("downloadMerge_btn")
     shinyjs::disable("downloadConfig_btn")
+    
+    use_previous_report <-FALSE
+    
     df_output <- NULL
     df_origin<-NULL
 
@@ -1219,12 +1245,36 @@ server <- function(input, output,session) {
 
     
     df_batch_detail <-data.frame()
+    df_prev_report_detail<-data.frame()
+    
+    n_cb_raw<-0
+    n_cb_prev<-0
     
     df_output_list <- FALSE
     df_origin_list <- FALSE
     df_spheroid_list <- FALSE
     
     
+    # help function for creating checkbox input in table
+    shinyInput = function(FUN, len, id, value, ...) {
+      if (length(value) == 1) value <- rep(value, len)
+      inputs = character(len)
+      for (i in seq_len(len)) {
+        inputs[i] = as.character(FUN(paste0(id, i), label = NULL, value = value[i]))
+      }
+      inputs
+    }
+    
+    # obtain the values of inputs
+    shinyValue = function(id, len) {
+      unlist(lapply(seq_len(len), function(i) {
+        value = input[[paste0(id, i)]]
+        if (is.null(value)) TRUE else value
+      }))
+    }
+    
+
+
     #### input panel ####
     
     ## Read the raw file (first file if multiple files have been uploaded)
@@ -1256,8 +1306,12 @@ server <- function(input, output,session) {
                         choices = ori_filename,
                         selected = head(ori_filename, 1))
       
+      n_cb_raw <<- length(ori_filename)
       ##initial the variables and UI for merging
-      df_batch_detail<<-data.frame(File_name=ori_filename, Processed=rep(c(FALSE), times = length(ori_filename)),
+      df_batch_detail<<-data.frame(
+        
+        Use = shinyInput(checkboxInput, n_cb_raw, 'cb_raw_', value = TRUE, width='1px'),                            
+        File_name=ori_filename, Processed=rep(c(FALSE), times = length(ori_filename)),
                                    Robust_Z_Low_Limit=NA,
                                    Robust_Z_Upper_Limit= NA,
                                    Threshold_Applied = NA,
@@ -1277,16 +1331,53 @@ server <- function(input, output,session) {
       df_origin_list <<- vector("list", length = length(ori_filename))
       df_spheroid_list <<- vector("list", length = length(ori_filename))
       
+      ## update file list in merge tab
       
-      output$merge_file <- 
+      #Display table with checkbox buttons
+      
+      # output$merge_file <- 
+      #   DT::renderDataTable({
+      #     DT::datatable(
+      #       cbind(cb_raw = shinyInput(checkboxInput, n_cb_raw, 'cb_raw_', value = TRUE, width='1px'),
+      #             df_batch_detail),
+      #       # df_batch_detail,
+      #       options = list(scrollX = TRUE))})
+      ##
+
+      # Init the table for merging
+      output$merge_file <-
         DT::renderDataTable({
           DT::datatable(
             df_batch_detail,
-            options = list(scrollX = TRUE))})
-      ##
+            # df_batch_detail,
+            escape = FALSE, selection = 'none',
+            options = list(
+              pageLength = 5,
+              scrollY = TRUE,
+              scrollX = TRUE,
+              preDrawCallback = JS('function() { Shiny.unbindAll(this.api().table().node()); }'),
+              drawCallback = JS('function() { Shiny.bindAll(this.api().table().node()); } ')
+            )
+          )
+        })
+      
+      observe({
+        shinyValue('cb_raw_', n_cb_raw)
+        if(all(df_batch_detail$Processed[shinyValue('cb_raw_', n_cb_raw)]) & any(df_batch_detail$Processed)){
+          shinyjs::enable("downloadMerge_btn")
+          shinyjs::enable("downloadConfig_btn")
+        }else{
+          shinyjs::disable("downloadMerge_btn")
+          shinyjs::disable("downloadConfig_btn")
+        }
+        
+      })
+      
       
       }
     })
+    
+
     
     ## update the raw data preview in the input panel
     ## event: After uploading the raw data
@@ -1302,8 +1393,10 @@ server <- function(input, output,session) {
           validate(need(ext == "xlsx","Please upload an xlsx file"))
           data <- readxl::read_xlsx(file$datapath[name_id])
           DT::datatable(
-            head(data, n=3),
-            options = list(scrollX = TRUE))
+            data,
+            options = list(scrollX = TRUE,
+                           scrollY = TRUE,
+                           pageLength = 5))
         }
       }
     )
@@ -1848,9 +1941,12 @@ server <- function(input, output,session) {
       
       df_batch_detail<<-df_temp_batch_detail
       
-      if(all(df_batch_detail$Processed)){
+      if(all(df_batch_detail$Processed[shinyValue('cb_raw_', n_cb_raw)]) & any(df_batch_detail$Processed)){
         shinyjs::enable("downloadMerge_btn")
         shinyjs::enable("downloadConfig_btn")
+      }else{
+        shinyjs::disable("downloadMerge_btn")
+        shinyjs::disable("downloadConfig_btn")
       }
       
       # global_wb <<- gen_report(Sph_Treat_Robz_ADVPC=Sph_Treat_Robz_ADVPC,
@@ -1972,9 +2068,25 @@ server <- function(input, output,session) {
         
         update_plots(df_temp , input$select_view_value)
         
-        output$merge_file <- DT::renderDataTable({
-          DT::datatable(
-            df_batch_detail,options = list(scrollX = TRUE))})
+        # output$merge_file <- DT::renderDataTable({
+        #   DT::datatable(
+        #     df_batch_detail,options = list(scrollX = TRUE))})
+        
+        output$merge_file <-
+          DT::renderDataTable({
+            DT::datatable(
+              df_batch_detail,
+              # df_batch_detail,
+              escape = FALSE, selection = 'none',
+              options = list(
+                pageLength = 5,
+                scrollY = TRUE,
+                scrollX = TRUE,
+                preDrawCallback = JS('function() { Shiny.unbindAll(this.api().table().node()); }'),
+                drawCallback = JS('function() { Shiny.bindAll(this.api().table().node()); } ')
+              )
+            )
+          })
         
       })
       
@@ -2056,9 +2168,26 @@ server <- function(input, output,session) {
         
         update_plots(df_temp , input$select_view_value)
         
-        output$merge_file <- DT::renderDataTable({
-          DT::datatable(
-            df_batch_detail,options = list(scrollX = TRUE))})
+        # output$merge_file <- DT::renderDataTable({
+        #   DT::datatable(
+        #     df_batch_detail,options = list(scrollX = TRUE))})
+        
+        output$merge_file <-
+          DT::renderDataTable({
+            DT::datatable(
+              df_batch_detail,
+              # df_batch_detail,
+              escape = FALSE, selection = 'none',
+              options = list(
+                pageLength = 5,
+                scrollY = TRUE,
+                scrollX = TRUE,
+                preDrawCallback = JS('function() { Shiny.unbindAll(this.api().table().node()); }'),
+                drawCallback = JS('function() { Shiny.bindAll(this.api().table().node()); } ')
+              )
+            )
+          })
+        
         
       })
       
@@ -2089,7 +2218,7 @@ server <- function(input, output,session) {
 
       filename = function() {
         
-        file_name = paste0("report_",input$select_file,".xlsx")
+        file_name = paste0("report_",input$select_file)
         paste(file_name, sep = "")
       },
       content = function(file) {
@@ -2155,8 +2284,7 @@ server <- function(input, output,session) {
         paste( "template_layout.csv", sep = "")
       },
       content = function(file) {
-        df_temp = read.csv("template_layout.csv",
-                           , row.names = 1,header=TRUE, check.names = FALSE)
+        df_temp = read.csv("template_layout.csv", row.names = 1,header=TRUE, check.names = FALSE)
         
         write.csv(df_temp,file,na="")
         # saveWorkbook(global_wb, file, overwrite = TRUE)
@@ -2180,17 +2308,113 @@ server <- function(input, output,session) {
       }
     )
     
+    ## functions in merge part
+    
+    ## Read in previous report in merge tab
+    ## event: upload previous report files
+    output$text_processed <- reactive({
+      processed_file <- input$processed_data
+      ## validate the file path is correct
+      if(!is.null(processed_file)){
+        for (datapath in processed_file$datapath){
+          print(datapath)
+          ext <- tools::file_ext(processed_file$datapath)
+          req(processed_file)
+          validate(need(ext == "xlsx","Please upload an xlsx file"))
+        }
+        
+        use_previous_report<<- TRUE
+        for (path in processed_file$name){
+          print(path)
+        }
+        
+        
+        ## Init the table for previous report
+        
+        n_cb_prev <<- length(processed_file$name)
+
+        df_prev_report_detail<<-data.frame(
+          Use = shinyInput(checkboxInput, n_cb_prev, 'cb_prev_', value = TRUE, width='1px')      ,
+          File_name=input$processed_data$name
+        )
+        
+        output$processed_data_table <-DT::renderDataTable({
+              DT::datatable(
+                df_prev_report_detail,
+                escape = FALSE, selection = 'none',
+                options = list(
+                  scrollX = TRUE,
+                  preDrawCallback = JS('function() { Shiny.unbindAll(this.api().table().node()); }'),
+                  drawCallback = JS('function() { Shiny.bindAll(this.api().table().node()); } ')
+                )
+              )
+        })
+        
+        ## observe the checkboxes for previous report table
+        observe({
+          shinyValue('cb_prev_', n_cb_prev)
+          if(any(shinyValue('cb_prev_', n_cb_prev)) == FALSE){
+            use_previous_report<<- FALSE
+          }
+          
+        })
+        
+        ""
+      }
+        
+        ## validate the file is correct  
+        
+        
+        # get the original file names
+        # ori_filename = input$processed_file$name
+        # 
+        # print(ori_filename)
+      
+      
+    })
+
+    ## merge processed raw files into the merge file
+    ## previous report can also be added in merging if provided
+    ## it is possible to select which files to merge
     merge_results = function(){
       result_list = list()
+      
+      
+      raw_file_cb_result = shinyValue('cb_raw_', n_cb_raw)
+      print(raw_file_cb_result)
       for(i in 1:length(df_batch_detail$File_name)){
-
-        # generate_merge_result(df_output_list[i],df_spheroid_list[i], df_batch_detail$File_name[i],global_df_treat)
-        # print(generate_merge_result(df_output_list[[i]],df_spheroid_list[[i]], df_batch_detail$File_name[i],global_df_treat))
-        result_list = append(result_list,
+        if (raw_file_cb_result[i]==TRUE){
+          result_list = append(result_list,
                               list(generate_merge_result(df_output_list[[i]],df_spheroid_list[[i]], df_batch_detail$File_name[i],global_df_treat)))
-        
-        # print(colnames(result_list[[i]]))
+        }
+
       }
+      
+      prev_file_cb_result = shinyValue('cb_prev_', n_cb_prev)
+      if(input$processed_file_chk==TRUE & use_previous_report==TRUE){
+        
+        
+        prev_list = lapply(input$processed_data$datapath[prev_file_cb_result], 
+                           function(x){read_excel(x, "Export dataset",col_names=TRUE, .name_repair = "universal")})
+        
+        prev_list = lapply(prev_list, function(x){
+          x$Job.Date=as.Date(x$Job.Date, origin="1900-01-01")
+          return(x)}
+        )
+        
+        print(length(result_list))
+        result_list = c(result_list,prev_list)
+        d1 = prev_list[[1]]
+        print(dim(d1))
+        print(colnames(d1))
+        print(rownames(d1))
+        print(d1$Job.Date)
+        print(d1$Time_Date)
+        
+        d1 = result_list[[1]]
+        
+      }
+      
       
       full_data = Reduce(function(x,y) {merge(x,y,all = TRUE)}, result_list)
       
@@ -2200,8 +2424,13 @@ server <- function(input, output,session) {
       
       
       # print(full_data_A)
-      # full_data_B$Date_Treated <- as.POSIXct(full_data_A$Date_Treated, format = "%Y-%m-%d %H:%M:%S")
-      # full_data_B$Date_Scanned <- as.POSIXct(full_data_A$Date_Scanned, format = "%Y-%m-%d %H:%M:%S")
+      
+      full_data_B$Job.Date <- as.Date(full_data_A$Job.Date, origin="1900-01-01")
+      full_data_B$Job.Date <- as.POSIXct(full_data_B$Job.Date, format = "%Y-%m-%d %H:%M:%S")
+      # print(full_data_B$Job.Date)
+      
+      
+      # full_data_B$Time_Date <- as.POSIXct(full_data_A$Time_Date, format = "%Y-%m-%d %H:%M:%S")
       # print(full_data_B)
       
       #option to save CSV, rem out for now..
@@ -2230,11 +2459,15 @@ server <- function(input, output,session) {
       maxrows <-nrow(full_data_A)+1
       
       
-      addStyle(wb_mergedata, sheet = 1, datestyle, rows = 2:maxrows , cols = c(22,23), gridExpand = TRUE)
-      
       addStyle(wb_mergedata, sheet = 1, dpstyle, rows = 2:maxrows , cols = c( 3:12,24:25), gridExpand = TRUE)
+      addStyle(wb_mergedata, sheet = 1, datestyle, rows = 2:maxrows , cols = c(
+                                                                 which(colnames(full_data_B)=="Time_Date"),
+                                                                 which(colnames(full_data_B)=="Job.Date")), gridExpand = TRUE)
+      # addStyle(wb_mergedata, sheet = 1, datestyle, rows = 2:maxrows , cols = c(22,23), gridExpand = TRUE)
       
-      addStyle(wb_mergedata, sheet = 1, datastyleC, rows = 2:maxrows , cols = c(1,13:21, 24,25), gridExpand = TRUE)
+      
+      
+      addStyle(wb_mergedata, sheet = 1, datastyleC, rows = 2:maxrows , cols = c(1,13:18,20:21, 24,25), gridExpand = TRUE)
       addStyle(wb_mergedata, sheet = 1, datastyleC, rows = 1 , cols = c(1:26), gridExpand = TRUE)
       
       addStyle(wb_mergedata, sheet = 1, datastyleR, rows = 2:maxrows , cols = c(3:12), gridExpand = TRUE)
@@ -2255,10 +2488,11 @@ server <- function(input, output,session) {
       
       
     }
-    
+    ## Download the merge file
+    ## event after clicking the download merge file button
     output$downloadMerge_btn <- downloadHandler(
       filename = function() {
-        paste("merged_report.xlsx", sep = "")
+        paste(input$mergeName_text, sep = "")
       },
       content = function(file) {
         
@@ -2271,14 +2505,20 @@ server <- function(input, output,session) {
       }
     )
     
+    ## Download the config file
+    ## event after clicking the download config file button
     output$downloadConfig_btn <- downloadHandler(
       filename = function() {
-        paste("overall_config.csv", sep = "")
+        paste(input$configName_text, sep = "")
       },
       content = function(file) {
         
+        df_prev_report_detail$is_previous_report = TRUE
+        df_batch_detail$is_previous_report = FALSE
         
-        write.csv(df_batch_detail, file)
+        df_config = rbind.fill(df_batch_detail,  df_prev_report_detail)
+        df_config$Use=NULL
+        write.csv(df_config, file,row.names = FALSE)
         # write.csv(df_temp,file)
         # saveWorkbook(global_wb, file, overwrite = TRUE)
         
