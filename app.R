@@ -188,17 +188,26 @@ draw_z_score_outlier_plot = function(df, value){
   
   # levels(df[,value]) = c("1", "0", "NA")
   # colours = c("1" = "red", "0" = "white", "NA"='grey')
+
   
+  df[is.na(df[,value]), value] <- 2
   df[,value] = factor(df[,value])
-  levels(df[,value]) = c(1,0,as.integer(NA))
-  colours = c("1" = "white", "0" = "red", "NA"='grey')
+  
+
+  levels(df[,value]) = c(0,1,2)
+  
+
+  colours = c("1" = "red", "0" = "white", "2"='tan1')
+  
+
   # colours = c(1 = "red", 0 = "white", NA='grey')
   
   
   ggplot(df, aes_string(x = "Row", y = "Col", fill = value,label="Well.Name")) +
     geom_tile() + 
     scale_y_continuous(breaks=1:12) + 
-    scale_fill_manual(values=colours, drop=FALSE) + geom_text()
+    scale_fill_manual(labels = c("Not an outlier", "Outlier determined by robust Z score", "Outliers determined from pre-set thresholds"),
+                      values=colours, drop=FALSE) + geom_text()
 }
 
 
@@ -1084,45 +1093,76 @@ ui <- navbarPage("SpheroidAnalyseR",
     )
     ),
     tabPanel("Outlier Removal",
-             sidebarLayout(
-
-               
                  sidebarPanel(
                    useShinyjs(), 
-                   selectInput("select_file",label="Choose a raw file",
-                               list()),
                    
-                   actionButton("outlier_btn", "Remove outliers"),
-                   downloadButton("downloadData_btn", "Download"),
-                   textOutput("textStatus"),
-                   numericInput("z_score","Robust z-score",value = 1.96, step=0.01, min=0),
-                   
-                   selectInput("select_view_value",label="Choose the value to plot and manual override",
-                               value_selections),
-                   selectInput("manual_outliers",label="Toggle cells status normal/outliers",
-                               manual_outlier_selections,
-                               multiple=TRUE,selectize=TRUE),
-                   actionButton("manual_outliers_btn", "apply manual adjustment"),
-                   textOutput("manualStatus"),
-                     # numericInput("z_low","Robust z-score low limit",value = -1.96, step=0.01),
-                     # numericInput("z_high","Robust z-score high limit",value = 1.96, step=0.01),
-                     checkboxInput("pre_screen","Apply Pre-screen thresholds?",value = TRUE),
-                     # checkboxInput("override","Apply Manual overrides?",value = FALSE),
+                    selectInput("select_file",label="Choose a raw file",
+                                list()),
+                    
+                    selectInput("select_view_value",label="Choose a value to plot the outliers",
+                                value_selections),
+                    
+                    downloadButton("downloadData_btn", "Download"),
+                    textOutput("textStatus"),
+                    helpText("Please run the outlier removal before downloading the report."),
+                    
+                    actionButton("outlier_btn", "Remove outliers"),
+                    helpText("The remove outlier button will plot the data based 
+                    on the metric selected above. If you are happy to proceed
+                    with default settings which will remove outliers based on
+                    the pre-set thresholds in the blue box then click remove outliers.
+                    Please use the blue box settings below if
+                    you would like to manually adjust settings prior to outlier removal 
+                    (this can be done any number of times)"),
+                    
+                    
+                    
+                    selectInput("manual_outliers",label="Toggle cells status normal/outliers",
+                                manual_outlier_selections,
+                                multiple=TRUE,selectize=TRUE),
+                    
+                    actionButton("manual_outliers_btn", "apply manual adjustment"),
+                    helpText("Once you have performed outlier removal,
+                    if you are unhappy with any of the automated choices 
+                    you have an option here to manually change the status of any given well 
+                    and then go to the top and press remove outliers again"),
+                    textOutput("manualStatus"),
+                
 
-
-                     conditionalPanel(condition ="input.pre_screen==1",
-                        #- Values above zero
-                        numericInput("area_threshold_low","Area lower limit",value=1,min=0),
-                        numericInput("area_threshold_high","Area higher limit",value=1630000,min=0),
-                        numericInput("diam_threshold_low","Diameter lower limit",value=100,min=0),
-                        numericInput("diam_threshold_high","Diameter higher limit",value=1440,min=0),
-                        numericInput("vol_threshold_low","Volume lower limit",value=1000,min=0),
-                        numericInput("vol_threshold_high","Volume higher limit",value=1567543610,min=0),
-                        numericInput("perim_threshold_low","Perimeter lower limit",value=100,min=0),
-                        numericInput("perim_threshold_high","Perimeter higher limit",value=6276,min=0),
-                        numericInput("circ_threshold_low","Circularity lower limit",value=0.01,min=0),
-                       numericInput("circ_threshold_high","Circularity higher limit",value=1,min=0)
+                   fluidRow(
+                     column(12,
+                            style = "background-color:#c0ecfa;",
+                            
+                            numericInput("z_score","Robust z-score",value = 1.96, step=0.01, min=0),
+                            helpText("Robust-Z-Score looks at the spread of the data and 
+                            removes things that are classed as outliers by a Robust-Z-Score 
+                            (citation – I will get this to you soon)"),
+                            
+                            checkboxInput("pre_screen","Apply Pre-screen thresholds?",value = TRUE),
+                            helpText("Pre-screen thresholds are to allow you to say that you will only include spheroids that lie within a range.
+                            This is because there could be an empty well,
+                            or an error with imaging that has produced a value that you don’t want to be included in any analysis."),
+                            
+                            # checkboxInput("override","Apply Manual overrides?",value = FALSE),
+                            
+                            
+                            conditionalPanel(condition ="input.pre_screen==1",
+                                             #- Values above zero
+                                             numericInput("area_threshold_low","Area lower limit",value=1,min=0),
+                                             numericInput("area_threshold_high","Area higher limit",value=1630000,min=0),
+                                             numericInput("diam_threshold_low","Diameter lower limit",value=100,min=0),
+                                             numericInput("diam_threshold_high","Diameter higher limit",value=1440,min=0),
+                                             numericInput("vol_threshold_low","Volume lower limit",value=1000,min=0),
+                                             numericInput("vol_threshold_high","Volume higher limit",value=1567543610,min=0),
+                                             numericInput("perim_threshold_low","Perimeter lower limit",value=100,min=0),
+                                             numericInput("perim_threshold_high","Perimeter higher limit",value=6276,min=0),
+                                             numericInput("circ_threshold_low","Circularity lower limit",value=0.01,min=0),
+                                             numericInput("circ_threshold_high","Circularity higher limit",value=1,min=0)
+                            )       
+                            
                      )
+                   )
+                   
 
 
                  ),
@@ -1149,7 +1189,7 @@ ui <- navbarPage("SpheroidAnalyseR",
                      
                      
                  )
-             ) 
+             
     ),
     
     tabPanel("Merging",
