@@ -781,8 +781,8 @@ gen_report = function(Sph_Treat_Robz_ADVPC,
 
   #
   # addStyle(wb, sheet = 12, datestyle, rows = 2:33 , cols = c(22,23), gridExpand = TRUE)
-  addStyle(wb, sheet = 12, datestyle, rows = 2:33 , cols = c(which(colnames(df_excel)=="Job.Date"),
-                                                             which(colnames(df_excel)=="Time_Date")), gridExpand = TRUE)
+  addStyle(wb, sheet = 12, datestyle, rows = 2:33 , cols = c(which(colnames(ADVPC_means)=="Job.Date"),
+                                                             which(colnames(ADVPC_means)=="Time_Date")), gridExpand = TRUE)
   
   addStyle(wb, sheet = 12, dpstyle, rows = 2:33 , cols = c( 3:12,24:25), gridExpand = TRUE)
 
@@ -1101,7 +1101,7 @@ ui <- navbarPage("SpheroidAnalyseR",
                     
                     selectInput("select_view_value",label="Choose a value to plot the outliers",
                                 value_selections),
-                    
+                   
                     downloadButton("downloadData_btn", "Download"),
                     textOutput("textStatus"),
                     helpText("Please run the outlier removal before downloading the report."),
@@ -1240,7 +1240,7 @@ server <- function(input, output,session) {
     
     shinyjs::disable("downloadMerge_btn")
     shinyjs::disable("downloadConfig_btn")
-    
+    shinyjs::disable("downloadData_btn")
     use_previous_report <-FALSE
     
     df_output <- NULL
@@ -1977,7 +1977,9 @@ server <- function(input, output,session) {
         global_TH_Circularity_min <<- TH_Circularity_min
         global_TH_Circularity_max <<-TH_Circularity_max
       }
+
       df_temp_batch_detail$Processed[name_id] = TRUE
+      shinyjs::enable("downloadData_btn")
       
       df_batch_detail<<-df_temp_batch_detail
       
@@ -2093,6 +2095,12 @@ server <- function(input, output,session) {
           df_temp = df_output_list[[name_id]]
           
           update_plots(df_temp , input$select_view_value)
+          
+          if(df_batch_detail$Processed[name_id] == TRUE){
+            shinyjs::enable("downloadData_btn")
+          }else{
+            shinyjs::disable("downloadData_btn")
+          }
           
         }
         
@@ -2246,10 +2254,6 @@ server <- function(input, output,session) {
         }
       })
 
-      observeEvent(input$downloadData_btn,{
-        message("Preparing")
-
-      })
       
     ### functions of downloading  
       
