@@ -189,13 +189,18 @@ draw_z_score_outlier_plot = function(df, value){
   # levels(df[,value]) = c("1", "0", "NA")
   # colours = c("1" = "red", "0" = "white", "NA"='grey')
 
-  
+  print(df[,value])
   df[is.na(df[,value]), value] <- 2
-  df[,value] = factor(df[,value])
   
+  print(df[,value])
+  # df[,value] = factor(df[,value])
+  
+  
+  df[,value] = factor(df[,value],levels = c("0","1","2"), ordered=TRUE)
+    
+  print(levels(df[,value]))
+  # levels(df[,value]) = c("0","1","2")
 
-  levels(df[,value]) = c(0,1,2)
-  
 
   colours = c("1" = "red", "0" = "white", "2"='tan1')
   
@@ -1170,9 +1175,9 @@ ui <- navbarPage("SpheroidAnalyseR",
                  mainPanel(
                     useShinyjs(), 
 
-                    strong("Plate layout after pre-sreen outlier removal (if applied)",id='title_pre'),
-                    
-                     plotOutput("outlierPlot"),
+                    # strong("Plate layout after pre-sreen outlier removal (if applied)",id='title_pre'),
+                    # 
+                    #  plotOutput("outlierPlot"),
                      
                     strong("Plate layout after robust Z-score outlier removal"),
                     plotOutput("resultPlot"),
@@ -1195,10 +1200,63 @@ ui <- navbarPage("SpheroidAnalyseR",
     tabPanel("Merging",
              sidebarPanel(
                
-               h3("Only available when all files have been processed"),
+               # h4("Only available when all files have been processed"),
+               helpText("Click merge button to generate merged report. Plots can be added to the report. "),
+               actionButton("merge_btn", "Merge"),
+               textOutput("text_create_merge"),
+               # checkboxInput("processed_file_chk","Use previous reports",value = FALSE),
+               # 
+
+               # 
+               # conditionalPanel(condition ="input.processed_file_chk==1",
+               #                  #- Values above zero
+               #                  fileInput(inputId = "processed_data","Choose previous reports",accept=".xlsx",buttonLabel = "Browse", multiple = TRUE),
+               #                  textOutput("text_processed")
+               # ),
                
+               
+               textInput("mergeName_text", "Merged file name", value = paste0("merge_file_", Sys.Date(),".xlsx")),
+               
+               helpText("Files can only be downloaded if all selected raw data have been processed"),
+               downloadButton("downloadMerge_btn", "Download the merged file"),
+               strong(""),
+               textInput("configName_text", "Config file name", value = paste0("config_file_", Sys.Date(),".csv")),
+               downloadButton("downloadConfig_btn", "Download the config file"),
+               
+               strong(""),
+               h4("Plotting"),
+               helpText("Choose plot configuration and add plot"),
+               selectInput("sel_plot",label="Choose plot types",
+                           c("Point","Dot","Bar","Box")),
+               
+               selectInput("sel_y",label="Choose value for y axis",
+                           c()),
+               
+               selectInput("sel_x",label="Choose value for x axis",
+                           c()),
+               
+               selectInput("sel_gp_1",label="Choose value for colouring",
+                           c()),
+               selectInput("sel_gp_2",label="Choose value 2 for colouring",
+                           c()),
+               actionButton("plt_m_plt_btn", "Plot"),
+               actionButton("add_m_plt_btn", "Add to the report"),
+               textOutput("text_merge_plt")
+               ),
+             
+             
+
+
+             mainPanel(
+               h4("Plot"),
+               plotOutput("mergePlot"),
+               
+               h4("Raw files"),
+               DT::dataTableOutput("merge_file"),
+               h4("Previous reports"),
+               helpText("Previous report can be uploaded for merging"),
                checkboxInput("processed_file_chk","Use previous reports",value = FALSE),
-               
+
                # checkboxInput("override","Apply Manual overrides?",value = FALSE),
 
                conditionalPanel(condition ="input.processed_file_chk==1",
@@ -1206,18 +1264,6 @@ ui <- navbarPage("SpheroidAnalyseR",
                                 fileInput(inputId = "processed_data","Choose previous reports",accept=".xlsx",buttonLabel = "Browse", multiple = TRUE),
                                 textOutput("text_processed")
                ),
-               
-               
-               textInput("mergeName_text", "Merged file name", value = paste0("merge_file_", Sys.Date(),".xlsx")),
-               downloadButton("downloadMerge_btn", "Download the merged file"),
-               h2(""),
-               textInput("configName_text", "Config file name", value = paste0("config_file_", Sys.Date(),".csv")),
-               downloadButton("downloadConfig_btn", "Download the config file")),
-             
-             mainPanel(
-               h2("Raw files"),
-               DT::dataTableOutput("merge_file"),
-               h2("Previous reports"),
                DT::dataTableOutput("processed_data_table")
                # tableOutput("merge_file")
                
@@ -1230,8 +1276,6 @@ ui <- navbarPage("SpheroidAnalyseR",
                )
     )
 
-    
-    
 )
 
 
@@ -1401,17 +1445,17 @@ server <- function(input, output,session) {
           )
         })
       
-      observe({
-        shinyValue('cb_raw_', n_cb_raw)
-        if(all(df_batch_detail$Processed[shinyValue('cb_raw_', n_cb_raw)]) & any(df_batch_detail$Processed)){
-          shinyjs::enable("downloadMerge_btn")
-          shinyjs::enable("downloadConfig_btn")
-        }else{
-          shinyjs::disable("downloadMerge_btn")
-          shinyjs::disable("downloadConfig_btn")
-        }
-        
-      })
+      # observe({
+      #   shinyValue('cb_raw_', n_cb_raw)
+      #   if(all(df_batch_detail$Processed[shinyValue('cb_raw_', n_cb_raw)]) & any(df_batch_detail$Processed)){
+      #     shinyjs::enable("downloadMerge_btn")
+      #     shinyjs::enable("downloadConfig_btn")
+      #   }else{
+      #     shinyjs::disable("downloadMerge_btn")
+      #     shinyjs::disable("downloadConfig_btn")
+      #   }
+      #   
+      # })
       
       
       }
@@ -1831,11 +1875,26 @@ server <- function(input, output,session) {
         TH_Circularity_min <- input$circ_threshold_low
         TH_Circularity_max <- input$circ_threshold_high
         
-        Spheroid_data_1$Area <- ifelse(Spheroid_data_1$Area < TH_Area_max & Spheroid_data_1$Area > TH_Area_min,  Spheroid_data_1$Area, NA)   
-        Spheroid_data_1$Diameter <- ifelse(Spheroid_data_1$Diameter<TH_Diameter_max & Spheroid_data_1$Diameter>TH_Diameter_min, Spheroid_data_1$Diameter, NA)
-        Spheroid_data_1$Circularity <- ifelse(Spheroid_data_1$Circularity<TH_Circularity_max & Spheroid_data_1$Circularity>TH_Circularity_min, Spheroid_data_1$Circularity, NA)
-        Spheroid_data_1$Volume <- ifelse(Spheroid_data_1$Volume<TH_Volume_max & Spheroid_data_1$Volume>TH_Volume_min, Spheroid_data_1$Volume, NA)
-        Spheroid_data_1$Perimeter <- ifelse(Spheroid_data_1$Perimeter<TH_Perimeter_max & Spheroid_data_1$Perimeter>TH_Perimeter_min, Spheroid_data_1$Perimeter, NA)
+        
+        pre_threshold_cond<-Spheroid_data_1$Area < TH_Area_max & Spheroid_data_1$Area > TH_Area_min &
+          Spheroid_data_1$Diameter<TH_Diameter_max & Spheroid_data_1$Diameter>TH_Diameter_min &
+          Spheroid_data_1$Circularity<TH_Circularity_max & Spheroid_data_1$Circularity>TH_Circularity_min &
+          Spheroid_data_1$Volume<TH_Volume_max & Spheroid_data_1$Volume>TH_Volume_min &
+          Spheroid_data_1$Perimeter<TH_Perimeter_max & Spheroid_data_1$Perimeter>TH_Perimeter_min
+        
+        # AND version
+        Spheroid_data_1$Area <- ifelse(pre_threshold_cond,  Spheroid_data_1$Area, NA)   
+        Spheroid_data_1$Diameter <- ifelse(pre_threshold_cond, Spheroid_data_1$Diameter, NA)
+        Spheroid_data_1$Circularity <- ifelse(pre_threshold_cond, Spheroid_data_1$Circularity, NA)
+        Spheroid_data_1$Volume <- ifelse(pre_threshold_cond, Spheroid_data_1$Volume, NA)
+        Spheroid_data_1$Perimeter <- ifelse(pre_threshold_cond, Spheroid_data_1$Perimeter, NA)
+        
+        # Previous OR version
+        # Spheroid_data_1$Area <- ifelse(Spheroid_data_1$Area < TH_Area_max & Spheroid_data_1$Area > TH_Area_min,  Spheroid_data_1$Area, NA)   
+        # Spheroid_data_1$Diameter <- ifelse(Spheroid_data_1$Diameter<TH_Diameter_max & Spheroid_data_1$Diameter>TH_Diameter_min, Spheroid_data_1$Diameter, NA)
+        # Spheroid_data_1$Circularity <- ifelse(Spheroid_data_1$Circularity<TH_Circularity_max & Spheroid_data_1$Circularity>TH_Circularity_min, Spheroid_data_1$Circularity, NA)
+        # Spheroid_data_1$Volume <- ifelse(Spheroid_data_1$Volume<TH_Volume_max & Spheroid_data_1$Volume>TH_Volume_min, Spheroid_data_1$Volume, NA)
+        # Spheroid_data_1$Perimeter <- ifelse(Spheroid_data_1$Perimeter<TH_Perimeter_max & Spheroid_data_1$Perimeter>TH_Perimeter_min, Spheroid_data_1$Perimeter, NA)
         
       }   
       
@@ -1983,32 +2042,15 @@ server <- function(input, output,session) {
       
       df_batch_detail<<-df_temp_batch_detail
       
-      if(all(df_batch_detail$Processed[shinyValue('cb_raw_', n_cb_raw)]) & any(df_batch_detail$Processed)){
-        shinyjs::enable("downloadMerge_btn")
-        shinyjs::enable("downloadConfig_btn")
-      }else{
-        shinyjs::disable("downloadMerge_btn")
-        shinyjs::disable("downloadConfig_btn")
-      }
+      # if(all(df_batch_detail$Processed[shinyValue('cb_raw_', n_cb_raw)]) & any(df_batch_detail$Processed)){
+      #   shinyjs::enable("downloadMerge_btn")
+      #   shinyjs::enable("downloadConfig_btn")
+      # }else{
+      #   shinyjs::disable("downloadMerge_btn")
+      #   shinyjs::disable("downloadConfig_btn")
+      # }
       
-      # global_wb <<- gen_report(Sph_Treat_Robz_ADVPC=Sph_Treat_Robz_ADVPC,
-      #                          df_treat = df_treat,df_setup = df_setup,
-      #                          Spheroid_data=Spheroid_data,
-      #                          # p_Area_new = p_Area_new, p_Area_dotplot_new = p_Area_dotplot_new,
-      #                          # p_Diameter_new =p_Diameter_new, p_Diameter_dotplot_new =p_Diameter_dotplot_new,
-      #                          # p_Circularity_new = p_Circularity_new, p_Circularity_dotplot_new = p_Circularity_dotplot_new,
-      #                          # p_Volume_new = p_Volume_new, p_Volume_dotplot_new = p_Volume_dotplot_new,
-      #                          # p_Perimeter_new= p_Perimeter_new , p_Perimeter_dotplot_new = p_Perimeter_dotplot_new,
-      #                          rawfilename = rawfilename ,platesetupname=platesetupname,
-      #                          RobZ_LoLim = RobZ_LoLim, RobZ_UpLim = RobZ_UpLim,
-      #                          TF_apply_thresholds = TF_apply_thresholds,
-      #                          TF_outlier_override = TF_outlier_override,
-      #                          TH_Area_max=TH_Area_max,TH_Area_min=TH_Area_min,
-      #                          TH_Diameter_max=TH_Diameter_max,TH_Diameter_min=TH_Diameter_min,
-      #                          TH_Volume_max=TH_Volume_max, TH_Volume_min=TH_Volume_min,
-      #                          TH_Perimeter_max = TH_Perimeter_max, TH_Perimeter_min=TH_Perimeter_min,
-      #                          TH_Circularity_max = TH_Circularity_max, TH_Circularity_min=TH_Circularity_min
-      #                          )
+
       
       message("All processing completed successfully.", "\n")
       message("\n") 
@@ -2061,11 +2103,11 @@ server <- function(input, output,session) {
       
     ## function for updating plots in the outlier removal panel
       update_plots = function(df, value){
-        output$outlierPlot <- renderPlot({
-          validate(need(df,"Please run the outlier removal"))
-          draw_outlier_plot(df,value)
-          
-        })
+        # output$outlierPlot <- renderPlot({
+        #   validate(need(df,"Please run the outlier removal"))
+        #   draw_outlier_plot(df,value)
+        #   
+        # })
         
         output$resultPlot <- renderPlot({
           validate(need(df,"Please run the outlier removal"))
@@ -2244,12 +2286,12 @@ server <- function(input, output,session) {
       observeEvent(input$pre_screen,{
         message(input$pre_screen)
         if(input$pre_screen==TRUE){
-          show("outlierPlot")
+          # show("outlierPlot")
           show("select_outlier_values")
-          shinyjs::show("title_pre")
+          # shinyjs::show("title_pre")
         }else{
-          shinyjs::hide("title_pre")
-          hide("outlierPlot")
+          # shinyjs::hide("title_pre")
+          # hide("outlierPlot")
           hide("select_outlier_values")
         }
       })
@@ -2421,48 +2463,9 @@ server <- function(input, output,session) {
     ## previous report can also be added in merging if provided
     ## it is possible to select which files to merge
     merge_results = function(){
-      result_list = list()
-      
-      
-      raw_file_cb_result = shinyValue('cb_raw_', n_cb_raw)
-      print(raw_file_cb_result)
-      for(i in 1:length(df_batch_detail$File_name)){
-        if (raw_file_cb_result[i]==TRUE){
-          result_list = append(result_list,
-                              list(generate_merge_result(df_output_list[[i]],df_spheroid_list[[i]], df_batch_detail$File_name[i],global_df_treat)))
-        }
 
-      }
       
-      prev_file_cb_result = shinyValue('cb_prev_', n_cb_prev)
-      if(input$processed_file_chk==TRUE & use_previous_report==TRUE){
-        
-        
-        prev_list = lapply(input$processed_data$datapath[prev_file_cb_result], 
-                           function(x){read_excel(x, "Export dataset",col_names=TRUE, .name_repair = "universal")})
-        
-        prev_list = lapply(prev_list, function(x){
-          x$Job.Date=as.Date(x$Job.Date, origin="1900-01-01")
-          return(x)}
-        )
-        
-        print(length(result_list))
-        result_list = c(result_list,prev_list)
-        d1 = prev_list[[1]]
-        print(dim(d1))
-        print(colnames(d1))
-        print(rownames(d1))
-        print(d1$Job.Date)
-        print(d1$Time_Date)
-        
-        d1 = result_list[[1]]
-        
-      }
-      
-      
-      full_data = Reduce(function(x,y) {merge(x,y,all = TRUE)}, result_list)
-      
-      print(colnames(full_data))
+
       full_data_A  <- full_data[with(full_data , order(ETST.d, T_I)),]
       full_data_B <- full_data_A
       
@@ -2527,11 +2530,271 @@ server <- function(input, output,session) {
       
       freezePane(wb_mergedata, sheet = 1,  firstActiveRow = 2)
       
+      ## add the plot part
+      if(length(l_merge_plts)>0){
+        addWorksheet(wb_mergedata , "plots", gridLines = FALSE)
+        for(i_plt in 1:length(l_merge_plts)){
+          
+          png(paste0(i_plt,".png"),width = 1024, height = 400, res=150)
+          print(length(l_merge_plts)) 
+          print(l_merge_plts[[i_plt]]) 
+          dev.off()
+          insertImage(wb_mergedata, 2, paste0(i_plt,".png"), width = 9, height = 3.5 , startRow = (i_plt-1)*20+1,startCol = 'A')
+          
+        }
+      }
+
+
+      
       #  Save outlier analysis report , 
       return(wb_mergedata)
       
       
     }
+    
+    
+    df_test=data.frame(a=c(1,2,3,4),b=c(5,6,7,8))
+    
+    l_merge_plts = list()
+    merge_plt=NA
+    full_data=NA
+    
+
+    
+    ## Render the plot on the merge tab
+    output$mergePlot <- renderPlot({
+      print("plot merge")
+      
+      plt <- plot_merge_plot()
+      merge_plt<<-plt
+      plt
+      
+    })
+    
+    ## Help funtion on output$mergePlot <- renderPlot 
+    plot_merge_plot <- eventReactive(input$plt_m_plt_btn,{
+      # Check if there is a merge dataframe
+      validate(need(!is.na(full_data),"Please make a plot before adding"))
+      
+
+      validate(need(!(input$sel_gp_1=="NULL" & input$sel_gp_2 !="NULL"), "Please select the first colouring variable"))
+
+
+
+      full_data$ETST.d = round(full_data$ETST.d)
+      full_data$ETST.h = round(full_data$ETST.h)
+      
+      # Get variables from selections
+      y_var=  paste0(input$sel_y,"_Mean")
+      y_se = paste0(input$sel_y,"_SE")
+      ymin_var = paste0(y_var,"-",y_se)
+      ymax_var = paste0(y_var,"+",y_se)
+      
+      
+      x_var = input$sel_x
+
+      
+
+
+      gp_full_data=full_data
+      # gp_full_data[,x_var] = as.factor(gp_full_data[,x_var]) 
+      
+      if(input$sel_gp_2 !="NULL"){
+        # Check if variables are duplicated
+        validate(need(input$sel_x!=input$sel_gp_1 &
+                        input$sel_x!=input$sel_gp_2 &
+                        input$sel_gp_2!=input$sel_gp_1,"Please select non-duplicate variables."))
+        gp_var = paste0('interaction(',input$sel_gp_1,',', input$sel_gp_2, ')')
+        
+        full_data[input$sel_gp_2] = as.factor(full_data[,input$sel_gp_2])
+
+
+        gp_full_data = gp_full_data %>% dplyr::group_by_(x_var,input$sel_gp_1,input$sel_gp_2)%>% summarise_(Mean = paste0("mean(", y_var,")"),
+                                                                    SE = paste0("mean(", y_se,")"))
+        
+      }else if (input$sel_gp_1 !="NULL"){
+        # Check if variables are duplicated
+        validate(need(input$sel_x!=input$sel_gp_1 ,"Please select non-duplicate variables."))
+        full_data[input$sel_gp_1] = as.factor(full_data[,input$sel_gp_1])
+        gp_var = input$sel_gp_1
+        
+        gp_full_data = gp_full_data %>% dplyr::group_by_(x_var,input$sel_gp_1)%>% summarise_(Mean = paste0("mean(", y_var,")"),
+                                                                    SE = paste0("mean(", y_se,")"))
+      }else{
+        gp_var = "NULL"
+        
+        gp_full_data = gp_full_data %>% dplyr::group_by_(x_var)%>% summarise_(Mean = paste0("mean(", y_var,")"),
+                                                                    SE = paste0("mean(", y_se,")"))
+        
+      }
+      
+      colnames(gp_full_data)[colnames(gp_full_data) == 'Mean'] <-y_var
+      colnames(gp_full_data)[colnames(gp_full_data) == 'SE'] <-y_se
+      
+      
+      # gp_var = "Conc_1"
+      # 
+      # full_data[,gp_var] = as.factor(full_data[,gp_var] )
+      
+      
+      if(input$sel_plot=="Point"){
+
+        # gp_full_data[,x_var] = as.inte(gp_full_data[,x_var]) 
+
+        p=ggplot(gp_full_data, aes_string(x=x_var, y=y_var, group=gp_var, color=gp_var)) + 
+          geom_errorbar(aes_string(ymin=ymin_var, ymax=ymax_var), width=.1) +
+          geom_line() + geom_point(aes_string(shape=gp_var))+
+          theme_minimal()
+      }
+      
+      if(input$sel_plot=="Dot"){
+        full_data[,x_var] = as.factor(full_data[,x_var])
+        
+        p=ggplot(full_data, aes_string(x=x_var, y=y_var)) + 
+          geom_dotplot(binaxis='y', stackdir='center') +
+           stat_summary(fun.y=mean, geom="point", shape=18,
+                            size=3, color="red")
+      }
+      
+      if(input$sel_plot=="Bar"){
+
+        gp_full_data[,x_var]=lapply(gp_full_data[,x_var], 
+                         as.factor)
+        
+        # gp_full_data[,x_var] = as.factor(gp_full_data[,x_var]) 
+        
+        p=ggplot(gp_full_data, aes_string( x=x_var,y=y_var, group=gp_var, fill=gp_var)) + 
+          geom_bar(stat="identity", position=position_dodge())+
+          geom_errorbar(aes(ymin=Area_Mean-Area_SE, ymax=Area_Mean+Area_SE),width=.2,
+                        position=position_dodge(.9)) 
+
+      }
+
+      if(input$sel_plot=="Box"){
+        
+        full_data_2 = full_data
+        full_data_2[,x_var] = as.factor(full_data_2[,x_var])
+        
+        p=ggplot(full_data_2, aes_string(x=x_var, y=y_var,fill=gp_var)) + 
+          geom_boxplot()  
+      
+      }
+      
+      
+      
+      return(p)
+      # ggplot(df_test)+geom_point( aes(x=a,y=b))
+    })
+    
+    
+    output$text_merge_plt<-renderText({
+      add_merge_plot()
+    })
+    
+    add_merge_plot <- eventReactive(input$add_m_plt_btn,{
+      validate(need(!is.na(merge_plt),"Please make a plot before adding"))
+      l_merge_plts[[length(l_merge_plts)+1]] <<- merge_plt
+      
+      "Plot added"
+      
+    })
+    
+    
+
+    
+    
+    output$text_create_merge<-renderText({
+      make_merge_data()
+    })
+    make_merge_data <- eventReactive(input$merge_btn,{
+      validate(need(length(df_batch_detail)>0 | (input$processed_file_chk==TRUE & use_previous_report==TRUE),
+                    "No files have been uploaded"))
+      
+      validate(need(all(df_batch_detail$Processed[shinyValue('cb_raw_', n_cb_raw)]) & any(df_batch_detail$Processed)| 
+                      (input$processed_file_chk==TRUE & use_previous_report==TRUE),
+                    "Please check all selected files have been processed"))
+      
+      result_list = list()
+      
+      
+      raw_file_cb_result = shinyValue('cb_raw_', n_cb_raw)
+      print(raw_file_cb_result)
+      if(length(df_batch_detail$File_name)>0){
+        for(i in 1:length(df_batch_detail$File_name)){
+          if (raw_file_cb_result[i]==TRUE){
+            result_list = append(result_list,
+                                 list(generate_merge_result(df_output_list[[i]],df_spheroid_list[[i]], df_batch_detail$File_name[i],global_df_treat)))
+          }
+          
+        }
+      }
+
+      
+      prev_file_cb_result = shinyValue('cb_prev_', n_cb_prev)
+      if(input$processed_file_chk==TRUE & use_previous_report==TRUE){
+        
+        
+        prev_list = lapply(input$processed_data$datapath[prev_file_cb_result], 
+                           function(x){read_excel(x, "Export dataset",col_names=TRUE, .name_repair = "universal")})
+        
+        prev_list = lapply(prev_list, function(x){
+          x$Job.Date=as.Date(x$Job.Date, origin="1900-01-01")
+          return(x)}
+        )
+        
+        print(length(result_list))
+        result_list = c(result_list,prev_list)
+        d1 = prev_list[[1]]
+        
+        d1 = result_list[[1]]
+        
+      }
+      
+      
+      full_data <<- Reduce(function(x,y) {merge(x,y,all = TRUE)}, result_list)
+      
+      #Update the selection for plotting
+      y_values =c("Area", "Diameter", "Volume", "Perimeter" , "Circularity")
+
+      updateSelectInput(session, "sel_y",
+                        choices = y_values,
+                        selected = head(y_values, 1))
+    
+      
+      
+      y_names = c(paste0(y_values, "_SE"),paste0(y_values, "_Mean"))
+      
+      ori_col_names = colnames(full_data)
+      x_values = ori_col_names[!(ori_col_names %in% y_names)]
+      x_values=x_values[x_values!="T_I"]
+      
+      
+
+      updateSelectInput(session, "sel_x",
+                        choices = x_values,
+                        selected = head(x_values, 1))  
+      
+      gp_values = c("NULL",x_values)
+      updateSelectInput(session, "sel_gp_1",
+                        choices = gp_values,
+                        selected = head(gp_values, 1))  
+
+      updateSelectInput(session, "sel_gp_2",
+                        choices = gp_values,
+                        selected = head(gp_values, 1))  
+      
+      # enable the download button
+      shinyjs::enable("downloadMerge_btn")
+      shinyjs::enable("downloadConfig_btn")
+      
+      
+      "Merge result created. Plots can be added and ready for download."
+      
+    })
+    
+
+    
+    
     ## Download the merge file
     ## event after clicking the download merge file button
     output$downloadMerge_btn <- downloadHandler(
