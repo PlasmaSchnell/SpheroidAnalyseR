@@ -171,48 +171,70 @@ cal_z_score = function(df_sph_treat, df_prev, varname, RobZ_LoLim, RobZ_UpLim){
 #####  end of function
 
 ##### function for drawing outliers
-draw_outlier_plot = function(df, value){
-  df$is_Outlier = is.na(df[,value])
-  levels(df$is_Outlier) = c(TRUE, FALSE)
-  colours = c("TRUE" = "red", "FALSE" = "white")
-  
-  ggplot(df, aes(x = Row, y = Col, fill = is_Outlier,label=Well.Name)) +
-    geom_tile() + 
-    scale_y_continuous(breaks=1:12) + 
-    scale_fill_manual(values=colours, drop=FALSE) + geom_text()
-}
+# draw_outlier_plot = function(df, value){
+#   df$is_Outlier = is.na(df[,value])
+#   levels(df$is_Outlier) = c(TRUE, FALSE)
+#   colours = c("TRUE" = "red", "FALSE" = "white")
+#   
+#   ggplot(df, aes(x = Row, y = Col, fill = is_Outlier,label=Well.Name)) +
+#     geom_tile() + 
+#     scale_y_continuous(breaks=1:12) + 
+#     scale_fill_manual(values=colours, drop=FALSE) + geom_text()
+# }
 
 
 draw_z_score_outlier_plot = function(df, value){
+
+  
   value= paste0(value,"_status")
+  ## fill un-used cells
+  for(c in 1:12){
+    for(r in LETTERS[1:8]){
+      well_name = paste0(r,sprintf("%02d", c))
+      if ( !(well_name %in% df$Well.Name)){
+        
+        df_row =df[1,]
+        df_row$Col = c
+        df_row$Row = r
+        df_row$Well.Name = paste0(r,sprintf("%02d", c))
+        
+        df_row[,value] = '3'
+        
+        df<- rbind(df, df_row)
+      }
+    }
+  }
   
-  # levels(df[,value]) = c("1", "0", "NA")
-  # colours = c("1" = "red", "0" = "white", "NA"='grey')
 
-  print(df[,value])
-  df[is.na(df[,value]), value] <- 2
+  if(TF_apply_thresholds==TRUE){
+    df[is.na(df[,value]), value] <- 2
+  }else{
+    df[is.na(df[,value]), value] <- 1
+  }
   
-  print(df[,value])
-  # df[,value] = factor(df[,value])
+  
+
   
   
-  df[,value] = factor(df[,value],levels = c("0","1","2"), ordered=TRUE)
+  # df[,value] = factor(df[,value],levels = c("0","1","2"), ordered=TRUE)
+  df[,value] = factor(df[,value],levels = c("0","1","2","3"), ordered=TRUE)
     
-  print(levels(df[,value]))
-  # levels(df[,value]) = c("0","1","2")
 
-
-  colours = c("1" = "red", "0" = "white", "2"='tan1')
+  # colours = c("1" = "red", "0" = "white", "2"='tan1')
+  colours = c("1" = "red", "0" = "white", "2"='tan1' , '3' = 'grey')
+  # col_labels = c("Not an outlier", "Outlier determined by robust Z score", "Outliers determined from pre-set thresholds" )
+  col_labels = c("Not an outlier", "Outlier determined by robust Z score", 
+                 "Outliers determined from pre-set thresholds",
+                 "Unused cells")
   
-
   # colours = c(1 = "red", 0 = "white", NA='grey')
   
-  
-  ggplot(df, aes_string(x = "Row", y = "Col", fill = value,label="Well.Name")) +
+  df$Col = as.factor(df$Col)
+  ggplot(df, aes_string(x = "Col", y = "Row", fill = value,label="Well.Name")) +
     geom_tile() + 
-    scale_y_continuous(breaks=1:12) + 
-    scale_fill_manual(labels = c("Not an outlier", "Outlier determined by robust Z score", "Outliers determined from pre-set thresholds"),
-                      values=colours, drop=FALSE) + geom_text()
+    scale_y_discrete(limits = rev) +scale_x_discrete(position = "top") +
+    scale_fill_manual(labels = col_labels,
+                      values=colours, drop=FALSE) + geom_text() 
 }
 
 
@@ -566,6 +588,14 @@ gen_report = function(Sph_Treat_Robz_ADVPC,
   insertImage(wb, 5, "p52.png", width = 9, height = 3.5,startRow = 19,startCol = 'A')
   
   unlink(c("p11", "p12", "p21", "p22","p31", "p32","p41", "p42","p51", "p52"))
+  
+  # for(temp_file_name in c("p11", "p12", "p21", "p22","p31", "p32","p41", "p42","p51", "p52")){
+  #   
+  #   file.remove(paste0(temp_file_name,".png"))
+  # }
+  
+  
+  
   
   # suppressMessages(print(p_Area_new))
   # insertPlot(wb, 1, xy = c("A", 1), width = 9, height = 3.5,  fileType = "png", units = "in")
@@ -1227,7 +1257,7 @@ ui <- navbarPage("SpheroidAnalyseR",
                h4("Plotting"),
                helpText("Choose plot configuration and add plot"),
                selectInput("sel_plot",label="Choose plot types",
-                           c("Point","Dot","Bar","Box")),
+                           c("Bar","Point","Dot","Box")),
                
                selectInput("sel_y",label="Choose value for y axis",
                            c()),
@@ -1239,6 +1269,8 @@ ui <- navbarPage("SpheroidAnalyseR",
                            c()),
                selectInput("sel_gp_2",label="Choose value 2 for colouring",
                            c()),
+               textInput("plotName_text", "Name of the plot", value = "Plot"),
+               
                actionButton("plt_m_plt_btn", "Plot"),
                actionButton("add_m_plt_btn", "Add to the report"),
                textOutput("text_merge_plt")
@@ -1327,6 +1359,7 @@ server <- function(input, output,session) {
     global_TH_Circularity_min <-NULL
     global_TH_Circularity_max <-NULL
 
+    TF_apply_thresholds <-TRUE
     
     df_batch_detail <-data.frame()
     df_prev_report_detail<-data.frame()
@@ -1338,6 +1371,8 @@ server <- function(input, output,session) {
     df_origin_list <- FALSE
     df_spheroid_list <- FALSE
     
+    layout_file_error = FALSE
+    treat_file_error = FALSE
     
     # help function for creating checkbox input in table
     shinyInput = function(FUN, len, id, value, ...) {
@@ -1467,6 +1502,9 @@ server <- function(input, output,session) {
     ## event: After uploading the raw data
     output$data_preview <- DT::renderDataTable(
       {
+        updateNumericInput(session, "z_score", value = 1.96)
+
+        
         file <- input$raw_data
         name_id = which(file$name == input$select_file_preview)
         print(input$select_file_preview)
@@ -1504,11 +1542,16 @@ server <- function(input, output,session) {
         
         error_list = check_layout(df_check)
 
-        validate(need(error_list[1] == TRUE,"Dimension error\nCheck if the file is 8x12 (row names and column names excluded)"))
-        validate(need(error_list[2] == TRUE,"Column names error\nplease refer to the template"))
-        validate(need(error_list[3] == TRUE,"Row names error\nplease refer to the template"))
-        validate(need(error_list[4] == TRUE,"Value error\nCheck values in the layout file"))
+        if(all(error_list)==FALSE){
+          layout_file_error<<-TRUE
+        }else{
+          layout_file_error<<-FALSE
+        }
         
+        validate(need(error_list[1] == TRUE,"Dimension error\nCheck if the file is 8x12 (row names and column names excluded)"),
+                 need(error_list[2] == TRUE,"Column names error\nplease refer to the template"),
+                 need(error_list[3] == TRUE,"Row names error\nplease refer to the template"),
+                 need(error_list[4] == TRUE,"Value error\nCheck values in the layout file"))
         
         layout <- readr::read_csv(layout_file$datapath)  %>% 
           #     #layout <- readr::read_csv("layout_example.csv") %>% 
@@ -1606,10 +1649,16 @@ server <- function(input, output,session) {
         
         error_list = check_treatment(df_check)
         
-        validate(need(error_list[1] == TRUE,"Dimension error\nCheck if the file is 6x8 (row names and column names excluded)"))
-        validate(need(error_list[2] == TRUE,"Column names error\nplease refer to the template"))
-        validate(need(error_list[3] == TRUE,"Row names error\nplease refer to the template"))
-        validate(need(error_list[4] == TRUE,"Value error\nCheck values in the treatment file"))
+        if(all(error_list)==FALSE){
+          treat_file_error<<-TRUE
+        }else{
+          treat_file_error<<-FALSE
+        }
+        
+        validate(need(error_list[1] == TRUE,"Dimension error\nCheck if the file is 6x8 (row names and column names excluded)"),
+                 need(error_list[2] == TRUE,"Column names error\nplease refer to the template"),
+                 need(error_list[3] == TRUE,"Row names error\nplease refer to the template"),
+                 need(error_list[4] == TRUE,"Value error\nCheck values in the treatment file"))
 
         
         treatments <- readr::read_csv(treat_file$datapath) %>% 
@@ -1677,19 +1726,23 @@ server <- function(input, output,session) {
     
     ###functions for drawing layout & treatment preview
     draw_layout<-function(df_layout){
+      
+      df_layout$Col = as.factor(df_layout$Col)
+      
       df_layout$Well.Name = paste0(df_layout$Row,df_layout$Col)
-      ggplot(df_layout, aes(x = Row, y = Col, label=Well.Name)) +
+      ggplot(df_layout, aes(x = Col, y = Row, label=Well.Name)) +
         geom_tile() +
-        geom_text() +
-        scale_y_continuous(breaks=1:12)
+        geom_text()  +scale_y_discrete(limits = rev) +scale_x_discrete(position = "top") 
     }
     draw_layout_with_treat <-function(df_layout, df_treat, value){
       layout <- left_join(df_layout,df_treat)
+      
+      layout$Col = as.factor(layout$Col)
       layout$Well.Name = paste0(layout$Row,layout$Col)
       
-      ggplot(layout, aes_string(x = "Row", y = "Col",fill=value,label="Well.Name")) +
+      ggplot(layout, aes_string(x = "Col", y = "Row",fill=value,label="Well.Name")) +
         geom_tile() +
-        scale_y_continuous(breaks=1:12)+ geom_text()
+         geom_text() + scale_y_discrete(limits = rev)+scale_x_discrete(position = "top")
       
     }
     
@@ -1698,8 +1751,11 @@ server <- function(input, output,session) {
   
     ## remove outliers of the selected raw file in the outlier removal panel
     ## event: click the outlier removal button
-    
+
     output_report <- eventReactive(input$outlier_btn, {
+      print("file errors")
+      print(treat_file_error)
+      print(layout_file_error)
       validate(
         need(is.numeric(input$z_score) & input$z_score>0, "Please input a positive Z score (numeric)"),
         
@@ -1723,7 +1779,10 @@ server <- function(input, output,session) {
         
         need(input$raw_data, "please upload the raw data"),
         need(input$layout, "please upload the layout file"),
-        need(input$treat_data, "please upload the treatment file")
+        need(input$treat_data, "please upload the treatment file"),
+        
+        need(treat_file_error==FALSE, "Treatment file has errors"),
+        need(layout_file_error==FALSE, "Layout file has errors")
       )
       
 
@@ -1766,7 +1825,7 @@ server <- function(input, output,session) {
       # RobZ_LoLim <- input$z_low
       # RobZ_UpLim <- input$z_high
       
-      TF_apply_thresholds <- input$pre_screen
+      TF_apply_thresholds <<- input$pre_screen
       TF_outlier_override <- FALSE
       TF_copytomergedir <- FALSE
       
@@ -1807,29 +1866,37 @@ server <- function(input, output,session) {
       
 
       datalength <- nrow(Spheroid_data)
-      checksumOK <- "TRUE"
+      checksumOK <- TRUE
       
       if (checksum != datalength)  
-      {checksumOK <- "FALSE"} 
+      {checksumOK <- FALSE} 
       
-      #- do the check
-      if (checksumOK == "FALSE")
-      {
-        message("#### Warning : plate setup checksum mismatch. ####","\n")
-        message("Number of rows of data in raw file (",datalength  ,") does not match the plate setup checksum (",checksum,") \n")
-        message("Output file corruption may occur - please recheck your plate setup","\n")
-        message("Processing halted","\n")
-        message("\n")
-        sink()
-        stop()
-      }
-      #- do the check
-      if (checksumOK == "TRUE")
-        
-      {
-        message("** Plate setup checksum is valid for raw dataset ","\n")
-        message("Number of rows of data in raw file (",datalength  ,") matches the checksum (",checksum,") \n")
-      }
+
+      validate(
+        need(checksumOK, paste0("Number of rows of data in raw file (",
+                                datalength,
+                                ") does not match the plate setup checksum ("
+                                ,checksum,") \nPlease upload "))
+      )
+      
+      # #- do the check
+      # if (checksumOK == "FALSE")
+      # {
+      #   message("#### Warning : plate setup checksum mismatch. ####","\n")
+      #   message("Number of rows of data in raw file (",datalength  ,") does not match the plate setup checksum (",checksum,") \n")
+      #   message("Output file corruption may occur - please recheck your plate setup","\n")
+      #   message("Processing halted","\n")
+      #   message("\n")
+      #   sink()
+      #   stop()
+      # }
+      # #- do the check
+      # if (checksumOK == "TRUE")
+      #   
+      # {
+      #   message("** Plate setup checksum is valid for raw dataset ","\n")
+      #   message("Number of rows of data in raw file (",datalength  ,") matches the checksum (",checksum,") \n")
+      # }
       
       
       
@@ -2062,7 +2129,32 @@ server <- function(input, output,session) {
       #             p_Circularity_new,p_Circularity_dotplot_new,
       #             p_Volume_new,p_Volume_dotplot_new,
       #             p_Perimeter_new,p_Perimeter_dotplot_new)
-      "Report generated, please download the report"
+      
+      check_empty_cells_1 = which(Spheroid_data[,c("Spheroid_Area.TD.Area","Spheroid_Area.TD.FillArea.Mean","Spheroid_Area.TD.Perimeter.Mean" ,    
+                                      "Spheroid_Area.TD.Circularity.Mean","Spheroid_Area.TD.Count","Spheroid_Area.TD.EqDiameter.Mean" ,   
+                                      "Spheroid_Area.TD.VolumeEqSphere.Mean" ,"Spheroid_Area.TD.Roughness.Mean","Spheroid_Area.TD.ShapeFactor.Mean" )] ==0 
+                     , arr.ind=TRUE)
+      
+      
+      
+      check_empty_cells_2 = which(is.na(Spheroid_data[,c("Spheroid_Area.TD.Area","Spheroid_Area.TD.FillArea.Mean","Spheroid_Area.TD.Perimeter.Mean" ,    
+                                             "Spheroid_Area.TD.Circularity.Mean","Spheroid_Area.TD.Count","Spheroid_Area.TD.EqDiameter.Mean" ,   
+                                             "Spheroid_Area.TD.VolumeEqSphere.Mean" ,"Spheroid_Area.TD.Roughness.Mean","Spheroid_Area.TD.ShapeFactor.Mean" )]), arr.ind=TRUE)
+      
+      
+      check_empty_cells = rbind(check_empty_cells_1, check_empty_cells_2)
+      
+      
+      empty_rows = unique(check_empty_cells[,1])
+      
+      if(length(empty_rows)!=0){
+        empty_cells = paste0(Spheroid_data$Well.Name[empty_rows],collapse = " ")
+        paste0("Report generated, please download the report. These cells may have empty measurements: ",empty_cells, ". Please Check the raw file" )
+      }
+      else{
+        "Report generated, please download the report"
+      }
+
     })
     
     ## renew the text in the outlier removal tab
@@ -2249,7 +2341,6 @@ server <- function(input, output,session) {
       
       observeEvent(input$manual_outliers_btn, {
 
-
         manual_override()
 
         name_id = which(input$raw_data$name == input$select_file)
@@ -2285,6 +2376,7 @@ server <- function(input, output,session) {
       ## event click the tick box of showing the threshold
       observeEvent(input$pre_screen,{
         message(input$pre_screen)
+
         if(input$pre_screen==TRUE){
           # show("outlierPlot")
           show("select_outlier_values")
@@ -2541,11 +2633,12 @@ server <- function(input, output,session) {
           dev.off()
           insertImage(wb_mergedata, 2, paste0(i_plt,".png"), width = 9, height = 3.5 , startRow = (i_plt-1)*20+1,startCol = 'A')
           
+          # file.remove(paste0(i_plt,".png"))
+          
         }
       }
 
 
-      
       #  Save outlier analysis report , 
       return(wb_mergedata)
       
@@ -2643,8 +2736,7 @@ server <- function(input, output,session) {
 
         p=ggplot(gp_full_data, aes_string(x=x_var, y=y_var, group=gp_var, color=gp_var)) + 
           geom_errorbar(aes_string(ymin=ymin_var, ymax=ymax_var), width=.1) +
-          geom_line() + geom_point(aes_string(shape=gp_var))+
-          theme_minimal()
+          geom_line() + geom_point(aes_string(shape=gp_var))
       }
       
       if(input$sel_plot=="Dot"){
@@ -2681,7 +2773,7 @@ server <- function(input, output,session) {
       }
       
       
-      
+      p=p+theme_minimal() + ggtitle(input$plotName_text) 
       return(p)
       # ggplot(df_test)+geom_point( aes(x=a,y=b))
     })
