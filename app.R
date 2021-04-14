@@ -183,7 +183,7 @@ cal_z_score = function(df_sph_treat, df_prev, varname, RobZ_LoLim, RobZ_UpLim){
 # }
 
 
-draw_z_score_outlier_plot = function(df, value){
+draw_z_score_outlier_plot = function(df, value, TF_apply_thresholds=TRUE){
 
   
   value= paste0(value,"_status")
@@ -2203,7 +2203,7 @@ server <- function(input, output,session) {
         
         output$resultPlot <- renderPlot({
           validate(need(df,"Please run the outlier removal"))
-          draw_z_score_outlier_plot(df,value)
+          draw_z_score_outlier_plot(df,value, TF_apply_thresholds = TF_apply_thresholds)
         })
         
         output$plot1Plot <- renderPlot({
