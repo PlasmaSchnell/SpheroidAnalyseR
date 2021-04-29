@@ -1802,7 +1802,7 @@ server <- function(input, output,session) {
       
    
       validate(need((length(df_batch_detail)==0 | (all(df_batch_detail$Processed[shinyValue('cb_raw_', n_cb_raw)]) & any(df_batch_detail$Processed))) & 
-                      (input$processed_file_chk==TRUE & use_previous_report==TRUE),
+                      ((input$processed_file_chk==TRUE & use_previous_report==TRUE) | input$processed_file_chk==FALSE),
                     "Please check all selected files have been processed"))
       
       result_list = list()
