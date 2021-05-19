@@ -1,11 +1,17 @@
-#
-# This is a Shiny web application. You can run the application by clicking
-# the 'Run App' button above.
-#
-# Find out more about building applications with Shiny here:
-#
-#    http://shiny.rstudio.com/
-#
+# File name: app.R (https://github.com/markdunning/SpheroidAnalyseR)
+# Author: Yichen He
+# Date: May-2021
+# This is a Shiny web app that :
+#   1. Allows users to upload spheroid raw files, plate layout and Treatment files
+#   2. Removes outliers on raw files based on thresholds and Robust Z-score. Users can download the outlier analysis report
+#   3. Merges outlier analysis reports into the final merged file
+                                                                  
+# Project:          Spheroid Analysis                                     
+#                   Rhiannon Barrow, Joe Wilkinson, Mark Dunning, Dr Lucy Stead                 
+#                   Glioma Genomics                                       
+#                   Leeds Institute of Medical Research                   
+#                   St James's University Hospital, Leeds  LS9 7TF 
+
 
 library(tidyverse)
 library(ggthemes)
@@ -21,29 +27,62 @@ library(DT)
 
 source('SpheroidAnalyseR_lib.R')
 
+
 manual_outlier_selections = outer(LETTERS[1:8], paste0(1:12,'.'), FUN = "paste")
 dim(manual_outlier_selections) =NULL
 
 value_selections = list("Area", "Diameter", "Volume", "Perimeter" , "Circularity")
+
 #################### 
 ##### Shiny App ####
 ####################
 
 # Define UI for application that draws a histogram
 ui <- navbarPage(#"SpheroidAnalyseR",
-    title=div(img(src="leeds_logo.png"),
-              "SpheroidAnalyseR"),
-    
-
-    
-    
-      # Application title
+  
+  
+  # Title
+  title=div(img(src="leeds_logo.png",style = "margin:-30px 10px"),"SpheroidAnalyseR"),
+  windowTitle = HTML("SpheroidAnalyseR"),
+  
+  ## tab panels
+  #   Data input
+  #   Outlier removal
+  #   Merging
+  #   Plotting
+  #   Help
     tabPanel("Data Input",
     
     # Sidebar with a slider input for number of bins 
     sidebarLayout(
         sidebarPanel(
-          tags$head(tags$style(".shiny-output-error{color: red;font-weight: bold;}")),
+          # Style
+          tags$head(
+            tags$style(
+              HTML('
+              * {
+                font-family: Arial, sans-serif !important;
+              }
+
+            .navbar {min-height:58px !important;}
+
+            .navbar-nav {
+                font-size: 18px;
+                text-align: center;
+              }
+
+            .navbar-nav > li > a, .navbar-brand {
+            min-height:58px 
+            }
+
+            .navbar-brand{
+                  font-size: 24px;
+                  font-weight: bold;
+            }')
+            )),
+          
+          
+          #Side bar layout
           fileInput(inputId = "raw_data","Choose Raw Data",accept=".xlsx",buttonLabel = "Browse", multiple = TRUE),
           
           fileInput(inputId = "layout","Choose Plate Layout",accept=".csv",buttonLabel="Browse"),
@@ -111,8 +150,8 @@ ui <- navbarPage(#"SpheroidAnalyseR",
 
                    fluidRow(
                      column(12,
-                            style = "background-color:#c0ecfa;",
-                            
+                            # style = "background-color:#c0ecfa;",
+                            style = "background-color:#F6F1E4",
                             numericInput("z_score","Robust z-score",value = 1.96, step=0.01, min=0),
                             helpText("Robust-Z-Score looks at the spread of the data and 
                             removes things that are classed as outliers by a Robust-Z-Score 
@@ -179,15 +218,7 @@ ui <- navbarPage(#"SpheroidAnalyseR",
                helpText("Click merge button to generate merged report. Plots can be added to the report. "),
                actionButton("merge_btn", "Merge"),
                textOutput("text_create_merge"),
-               # checkboxInput("processed_file_chk","Use previous reports",value = FALSE),
-               # 
 
-               # 
-               # conditionalPanel(condition ="input.processed_file_chk==1",
-               #                  #- Values above zero
-               #                  fileInput(inputId = "processed_data","Choose previous reports",accept=".xlsx",buttonLabel = "Browse", multiple = TRUE),
-               #                  textOutput("text_processed")
-               # ),
                
                
                textInput("mergeName_text", "Merged file name", value = paste0("merge_file_", Sys.Date(),".xlsx")),
@@ -197,17 +228,10 @@ ui <- navbarPage(#"SpheroidAnalyseR",
                # strong(""),
                # textInput("configName_text", "Config file name", value = paste0("config_file_", Sys.Date(),".csv")),
                # downloadButton("downloadConfig_btn", "Download the config file")
-               
-              
-               
+
                ),
              
-             
-
-
              mainPanel(
-              
-               
                h4("Raw files"),
                DT::dataTableOutput("merge_file"),
                h4("Previous reports"),
@@ -434,20 +458,7 @@ server <- function(input, output,session) {
             )
           )
         })
-      
-      # observe({
-      #   shinyValue('cb_raw_', n_cb_raw)
-      #   if(all(df_batch_detail$Processed[shinyValue('cb_raw_', n_cb_raw)]) & any(df_batch_detail$Processed)){
-      #     shinyjs::enable("downloadMerge_btn")
-      #     shinyjs::enable("downloadConfig_btn")
-      #   }else{
-      #     shinyjs::disable("downloadMerge_btn")
-      #     shinyjs::disable("downloadConfig_btn")
-      #   }
-      #   
-      # })
-      
-      
+
       }
     })
     
@@ -538,53 +549,6 @@ server <- function(input, output,session) {
     )
     
     
-    # observeEvent(input$layout, {
-    #   layout_file <- input$layout
-    #   
-    #   if(!is.null(layout_file)){
-    #     ext <- tools::file_ext(layout_file$datapath)
-    #     req(layout_file)
-    #     validate(need(ext == "csv","Please upload a layout in csv format"))
-    #     
-    #     df_check = read.csv(layout_file$datapath,
-    #                    row.names = 1,header=TRUE, check.names = FALSE)
-    #     
-    #     error_list = check_layout(df_check)
-    #     print(error_list)
-    #     validate(need(error_list[1] == TRUE,"Check if the layout is 8x12 (row names and column names excluded)"))
-    #     validate(need(error_list[2] == TRUE,"Column names error, please refer to the template"))
-    #     validate(need(error_list[3] == TRUE,"Row names error, please refer to the template"))
-    #     validate(need(error_list[4] == TRUE,"Check values in the layout file"))
-    # 
-    #     
-    #     layout <- readr::read_csv(layout_file$datapath)  %>% 
-    #       #     #layout <- readr::read_csv("layout_example.csv") %>% 
-    #       dplyr::rename("Row"=X1) %>%
-    #       tidyr::pivot_longer(-Row,names_to="Col",
-    #                           values_to="Index") %>%
-    #       mutate(Index = as.factor(Index),Col=as.numeric(Col)) %>%
-    #       filter(!is.na(Row))
-    #     
-    #     df_plot_layout <<- layout
-    #     layout
-    #   }
-    #   
-    #   output$show_layout <- renderPlot(
-    #     {
-    #       if(!is.null(df_plot_layout)){
-    #         if(!is.null(df_plot_treat)){
-    #           draw_layout_with_treat(df_plot_layout, df_plot_treat, input$select_treatment)
-    #         }
-    #         else{
-    #           draw_layout(df_plot_layout)
-    #         }
-    #         
-    #       }
-    #     }
-    #   )
-    #   
-    # })
-    
     ## read treament file
     ## update the treatment variable selections
     ## If layout file has been uploaded:
@@ -644,42 +608,8 @@ server <- function(input, output,session) {
       ""
     })
     
-    # observeEvent(input$treat_data, {
-    #   treat_file <- input$treat_data
-    #   ## TO DO: Need to check that 1st column is named Index
-    #   if(!is.null(treat_file)){
-    #     ext <- tools::file_ext(treat_file$datapath)
-    #     req(treat_file)
-    #     validate(need(ext == "csv","Please upload a layout in csv format"))
-    #     treatments <- readr::read_csv(treat_file$datapath) %>% 
-    #       mutate_all(as.factor)
-    #     # update the value for treatment
-    #     selections = colnames(treatments)
-    #     updateSelectInput(session, "select_treatment",
-    #                       choices = selections,
-    #                       selected = head(selections, 1))
-    #     
-    #     df_plot_treat<<-treatments
-    #     treatments
-    #     
-    #   }
-    #   output$show_layout <- renderPlot(
-    #     {
-    #       if(!is.null(df_plot_layout)){
-    #         if(!is.null(df_plot_treat)){
-    #           draw_layout_with_treat(df_plot_layout, df_plot_treat, input$select_treatment)
-    #         }
-    #         else{
-    #           draw_layout(df_plot_layout)
-    #         }
-    #         
-    #       }
-    #     }
-    #   )
-    #   
-    # })
     
-    ###functions for drawing layout & treatment preview
+    ### Functions for plotting layout & treatment preview
     draw_layout<-function(df_layout){
       
       df_layout$Col = as.factor(df_layout$Col)
@@ -762,6 +692,7 @@ server <- function(input, output,session) {
       #- import raw data
       Spheroid_data <- suppressMessages(read_excel(rawfilename, "JobView",col_names=TRUE, .name_repair = "universal"))
       
+      ## Used in testing the outlier removal method
       
       # setup_file = "layout_example.csv"
       # treatment_file = "treatment_example.csv"
@@ -912,6 +843,7 @@ server <- function(input, output,session) {
         Spheroid_data_1$Perimeter <- ifelse(pre_threshold_cond, Spheroid_data_1$Perimeter, NA)
         
         # Previous OR version
+        
         # Spheroid_data_1$Area <- ifelse(Spheroid_data_1$Area < TH_Area_max & Spheroid_data_1$Area > TH_Area_min,  Spheroid_data_1$Area, NA)   
         # Spheroid_data_1$Diameter <- ifelse(Spheroid_data_1$Diameter<TH_Diameter_max & Spheroid_data_1$Diameter>TH_Diameter_min, Spheroid_data_1$Diameter, NA)
         # Spheroid_data_1$Circularity <- ifelse(Spheroid_data_1$Circularity<TH_Circularity_max & Spheroid_data_1$Circularity>TH_Circularity_min, Spheroid_data_1$Circularity, NA)
@@ -1118,35 +1050,7 @@ server <- function(input, output,session) {
       output_report()
     })
 
-      # output$outlierPlot <- renderPlot({
-      #   message(input$select_view_value)
-      #   validate(need(df_output,"Please run the outlier removal"))
-      #   message(paste("plot",input$select_view_value))
-      #   df_outlier_temp = df_output
-      #   draw_outlier_plot(df_outlier_temp,input$select_view_value)
-      # })
-      # 
-      # 
-      # output$resultPlot <- renderPlot({
-      #   message(input$select_view_value)
-      #   validate(need(df_output,"Please run the outlier removal"))
-      #   Sph_Treat_ADVPC = df_output
-      #   draw_z_score_outlier_plot(Sph_Treat_ADVPC,input$select_view_value)
-      # 
-      # })
-      # 
-      # output$plot1Plot <- renderPlot({
-      #   message(input$select_view_value)
-      #   validate(need(df_output,"Please run the outlier removal"))
-      #   draw_plot_1(df_output,input$select_view_value )
-      #   
-      # })
-      # 
-      # output$plot2Plot <- renderPlot({
-      #   message(input$select_view_value)
-      #   validate(need(df_output,"Please run the outlier removal"))
-      #   draw_plot_2(df_output,input$select_view_value )
-      # })
+
       
     ## function for updating plots in the outlier removal panel
       update_plots = function(df, value){
@@ -1281,9 +1185,6 @@ server <- function(input, output,session) {
 
         }
         df_output_list[[name_id]] <<- update_df_OR_by_status(df_temp)
-        
-        
-
         "Override successfully"
       }
       )
@@ -1488,6 +1389,8 @@ server <- function(input, output,session) {
           shinyValue('cb_prev_', n_cb_prev)
           if(any(shinyValue('cb_prev_', n_cb_prev)) == FALSE){
             use_previous_report<<- FALSE
+          }else{
+            use_previous_report<<- TRUE
           }
           
         })
@@ -1676,6 +1579,8 @@ server <- function(input, output,session) {
         gp_full_data = gp_full_data %>% dplyr::group_by_(x_var,input$sel_gp_1,input$sel_gp_2)%>% summarise_(Mean = paste0("mean(", y_var,")"),
                                                                     SE = paste0("mean(", y_se,")"))
         
+        gp_var = paste0('factor(' , gp_var , ')')
+        
       }else if (input$sel_gp_1 !="NULL"){
         # Check if variables are duplicated
         validate(need(input$sel_x!=input$sel_gp_1 ,"Please select non-duplicate variables."))
@@ -1684,6 +1589,7 @@ server <- function(input, output,session) {
         
         gp_full_data = gp_full_data %>% dplyr::group_by_(x_var,input$sel_gp_1)%>% summarise_(Mean = paste0("mean(", y_var,")"),
                                                                     SE = paste0("mean(", y_se,")"))
+        gp_var = paste0('factor(' , gp_var , ')')
       }else{
         gp_var = "NULL"
         
@@ -1702,7 +1608,7 @@ server <- function(input, output,session) {
       
       
       #Plot different types of plots using ggplot
-      gp_var = paste0('factor(' , gp_var , ')')
+      
       if(input$sel_plot=="Point"){
 
         # gp_full_data[,x_var] = as.inte(gp_full_data[,x_var]) 
@@ -1748,7 +1654,7 @@ server <- function(input, output,session) {
       
       }
       
-      
+
       if(input$sel_plot=="Box" | input$sel_plot=="Bar"){
         if(input$bw_plot_chk == TRUE){
           p=p+scale_fill_grey()
@@ -1756,7 +1662,7 @@ server <- function(input, output,session) {
           p=p+scale_fill_colorblind()
         }
       }
-      
+
       if(input$sel_plot=="Point"){
         if(input$bw_plot_chk == TRUE){
           p=p+scale_color_grey()
@@ -1764,6 +1670,9 @@ server <- function(input, output,session) {
           p=p+scale_color_colorblind()
         }
       }
+
+      
+      
       
       p=p+theme_minimal() + ggtitle(input$plotName_text) +
         theme(axis.title=element_text(size=16),
@@ -1796,13 +1705,24 @@ server <- function(input, output,session) {
     output$text_create_merge<-renderText({
       make_merge_data()
     })
+    
+    ## create the merged data
+    ## event after clicking the merge button
+    
     make_merge_data <- eventReactive(input$merge_btn,{
       validate(need(length(df_batch_detail)>0 | (input$processed_file_chk==TRUE & use_previous_report==TRUE),
                     "No files have been uploaded"))
+
+      # print(any(shinyValue('cb_raw_', n_cb_raw)) | 
+      #         ((input$processed_file_chk==TRUE & use_previous_report==TRUE) | input$processed_file_chk==FALSE))
       
-   
-      validate(need((length(df_batch_detail)==0 | (all(df_batch_detail$Processed[shinyValue('cb_raw_', n_cb_raw)]) & any(df_batch_detail$Processed))) & 
+      validate(need(any(shinyValue('cb_raw_', n_cb_raw)) | 
                       ((input$processed_file_chk==TRUE & use_previous_report==TRUE) | input$processed_file_chk==FALSE),
+                    "No files have been selected"))
+      
+      # print((input$processed_file_chk==TRUE & use_previous_report==TRUE) | input$processed_file_chk==FALSE)
+    
+      validate(need((length(df_batch_detail)==0 | (all(df_batch_detail$Processed[shinyValue('cb_raw_', n_cb_raw)]) & any(df_batch_detail$Processed))),
                     "Please check all selected files have been processed"))
       
       result_list = list()

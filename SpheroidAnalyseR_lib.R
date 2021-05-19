@@ -1,3 +1,14 @@
+# File name: SpheroidAnalyseR_lib.R (https://github.com/markdunning/SpheroidAnalyseR)
+# Author: Yichen He
+# Date: May-2021 
+# Logic functions behind SpheroidAnalyseR shiny app. 
+# Most of functions are based on Joe Wilkinson's original codes.
+#
+# Project:          Spheroid Analysis                                     
+#                   Rhiannon Barrow, Joe Wilkinson, Mark Dunning, Dr Lucy Stead                       
+#                   Glioma Genomics                                       
+#                   Leeds Institute of Medical Research                   
+#                   St James's University Hospital, Leeds  LS9 7TF 
 
 library(tidyverse)
 library(ggthemes)
@@ -11,11 +22,10 @@ library(ggpubr)
 
 
 ####### Check file formats ######
+
+# Check the layout file
+# Used in reading the layout file
 check_layout = function(df){
-  error_message=c("Check if the layout is 8x12 (row names and column names excluded)",
-                  "Column names error, please refer to the template",
-                  "Row names error, please refer to the template")
-  
   dim_check = all(dim(df) == c(8,12))
   
   colnames_check = tryCatch( all(colnames(df) == as.character(1:12)), error = function(e){F})
@@ -29,11 +39,9 @@ check_layout = function(df){
 }
 
 
+# Check the treatment file
+# Used in reading the treatment file
 check_treatment = function(df){
-  error_message=c("Check if the layout is 8x12 (row names and column names excluded)",
-                  "Column names error, please refer to the template",
-                  "Row names error, please refer to the template")
-  
   dim_check = all(dim(df) == c(6,8))
   colnames_check = colnames_check = tryCatch( all(colnames(df) == c("Index", "Treatment.Label",
                                                                     "Time_of_treatment", "Cell_line",
@@ -115,7 +123,7 @@ update_df_OR_by_status<- function(df){
 }
 
 
-##### function calculating outliers
+##### function calculating outliers based on Z score
 cal_z_score = function(df_sph_treat, df_prev, varname, RobZ_LoLim, RobZ_UpLim){
   med_name = paste0(varname,"_Median")
   Devn_name = paste0(varname,"_Devn")
@@ -988,6 +996,7 @@ gen_report = function(Sph_Treat_Robz_ADVPC,
   return(wb)
 }
 
+## Generate the merged dataframe.
 generate_merge_result = function(df,Spheroid_data, rawfilename,df_treat){
   
   df$T_I <- as.numeric(df$T_I)
