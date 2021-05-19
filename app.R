@@ -155,7 +155,7 @@ ui <- navbarPage(#"SpheroidAnalyseR",
                             numericInput("z_score","Robust z-score",value = 1.96, step=0.01, min=0),
                             helpText("Robust-Z-Score looks at the spread of the data and 
                             removes things that are classed as outliers by a Robust-Z-Score 
-                            (citation – I will get this to you soon)"),
+                            [1]"),
                             
                             checkboxInput("pre_screen","Apply Pre-screen thresholds?",value = TRUE),
                             helpText("Pre-screen thresholds are to allow you to say that you will only include spheroids that lie within a range.
