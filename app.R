@@ -84,13 +84,15 @@ ui <- navbarPage(#"SpheroidAnalyseR",
           
           #Side bar layout
           fileInput(inputId = "raw_data","Choose Raw Data",accept=".xlsx",buttonLabel = "Browse", multiple = TRUE),
+          textOutput("text_raw"),
           
           fileInput(inputId = "layout","Choose Plate Layout",accept=".csv",buttonLabel="Browse"),
           textOutput("text_layout"),
           
           fileInput(inputId = "treat_data","Choose Treatment Definitions",accept=".csv",buttonLabel="Browse"),
           textOutput("text_treat"),
-          downloadButton("downloadRawTemplate_btn", "Download the raw data template"),
+          downloadButton("downloadRawTemplate_btn", "Download the raw data template 1"),
+          downloadButton("downloadRawTemplate_2_btn", "Download the raw data template 2"),
           downloadButton("downloadLayoutTemplate_btn", "Download the plate layout template"),
           downloadButton("downloadTreatTemplate_btn", "Download the treatment template")
         ),
@@ -273,7 +275,11 @@ ui <- navbarPage(#"SpheroidAnalyseR",
                 
                 actionButton("plt_m_plt_btn", "Plot"),
                 actionButton("add_m_plt_btn", "Add to the report"),
-                textOutput("text_merge_plt")
+                textOutput("text_merge_plt"),
+                
+                h2(""),
+                textInput("plotsName_text", "Plot file name", value = paste0("plots_", Sys.Date(),".xlsx")),
+                downloadButton("downloadPlots_btn", "Download the report of plots")
                ),
              
              mainPanel( 
@@ -294,6 +300,7 @@ ui <- navbarPage(#"SpheroidAnalyseR",
 server <- function(input, output,session) {
     
     shinyjs::disable("downloadMerge_btn")
+    shinyjs::disable("downloadPlots_btn")
     shinyjs::disable("downloadConfig_btn")
     shinyjs::disable("downloadData_btn")
     use_previous_report <-FALSE
@@ -349,7 +356,8 @@ server <- function(input, output,session) {
     df_output_list <- FALSE
     df_origin_list <- FALSE
     df_spheroid_list <- FALSE
-    
+
+    raw_file_error = FALSE
     layout_file_error = FALSE
     treat_file_error = FALSE
     
@@ -377,90 +385,228 @@ server <- function(input, output,session) {
     
     ## Read the raw file (first file if multiple files have been uploaded)
     ## event: Upload raw file
-    observeEvent(input$raw_data, {
-      
+    
+    
+    output$text_raw <- reactive({
       file <- input$raw_data
       
       ## validate the file path is correct
       if(!is.null(file)){
         for (datapath in file$datapath){
-          ext <- tools::file_ext(file$datapath)
+          
+          ext <- tools::file_ext(datapath)
           req(file)
           validate(need(ext == "xlsx","Please upload an xlsx file"))
         }
         
-      ## validate the file is correct  
         
-      
-      # get the original file names
-      ori_filename = input$raw_data$name
-      
-      # Create selections for raw files in both input and outlier removal panels.
-      updateSelectInput(session, "select_file_preview",
-                        choices = ori_filename,
-                        selected = head(ori_filename, 1))
-      
-      updateSelectInput(session, "select_file",
-                        choices = ori_filename,
-                        selected = head(ori_filename, 1))
-      
-      n_cb_raw <<- length(ori_filename)
-      ##initial the variables and UI for merging
-      df_batch_detail<<-data.frame(
-        
-        Use = shinyInput(checkboxInput, n_cb_raw, 'cb_raw_', value = TRUE, width='1px'),                            
-        File_name=ori_filename, Processed=rep(c(FALSE), times = length(ori_filename)),
-                                   Robust_Z_Low_Limit=NA,
-                                   Robust_Z_Upper_Limit= NA,
-                                   Threshold_Applied = NA,
-                                   Threshold_Area_Min =NA,
-                                   Threshold_Area_Max =NA,
-                                   Threshold_Diameter_Min =NA,
-                                   Threshold_Diameter_Max =NA,
-                                   Threshold_Volume_Min =NA,
-                                   Threshold_Volume_Max =NA,
-                                   Threshold_Perimeter_Min =NA,
-                                   Threshold_Perimeter_Max =NA,
-                                   Threshold_Circularity_Min =NA,
-                                   Threshold_Circularity_Max =NA
-                                   )
-      
-      df_output_list <<- vector("list", length = length(ori_filename))
-      df_origin_list <<- vector("list", length = length(ori_filename))
-      df_spheroid_list <<- vector("list", length = length(ori_filename))
-      
-      ## update file list in merge tab
-      
-      #Display table with checkbox buttons
-      
-      # output$merge_file <- 
-      #   DT::renderDataTable({
-      #     DT::datatable(
-      #       cbind(cb_raw = shinyInput(checkboxInput, n_cb_raw, 'cb_raw_', value = TRUE, width='1px'),
-      #             df_batch_detail),
-      #       # df_batch_detail,
-      #       options = list(scrollX = TRUE))})
-      ##
-
-      # Init the table for merging
-      output$merge_file <-
-        DT::renderDataTable({
-          DT::datatable(
-            df_batch_detail,
-            # df_batch_detail,
-            escape = FALSE, selection = 'none',
-            options = list(
-              pageLength = 5,
-              scrollY = TRUE,
-              scrollX = TRUE,
-              preDrawCallback = JS('function() { Shiny.unbindAll(this.api().table().node()); }'),
-              drawCallback = JS('function() { Shiny.bindAll(this.api().table().node()); } ')
-            )
+        ##Iterate through the file and validate the file is correct 
+        by(file, seq_len(nrow(file)), function(row) {
+          
+          sheet_check = tryCatch( {read_excel(row$datapath, "JobView",col_names=TRUE, .name_repair = "universal") 
+            TRUE}
+            , error = function(e){F})
+          
+          validate(
+            need(sheet_check,paste("The data of", row$name, "should be saved in a sheet named JobView"))
+          )
+          
+          
+          df_raw_check <- readxl::read_xlsx(row$datapath)
+          
+          error_list = check_raw(df_raw_check)
+          
+          if(all(error_list)==FALSE){
+            raw_file_error<<-TRUE
+          }else{
+            raw_file_error<<-FALSE
+          }
+          
+          validate(
+            need(error_list[1],paste("Error file:" , row$name, "  Errors: Column names error\nplease refer to the raw file template")),
+            need(error_list[2],paste("Error file:" , row$name, "  Errors: Value error\nCheck values in the raw file"))
           )
         })
+        
+         
 
+        # get the original file names
+        ori_filename = input$raw_data$name
+        
+        # Create selections for raw files in both input and outlier removal panels.
+        updateSelectInput(session, "select_file_preview",
+                          choices = ori_filename,
+                          selected = head(ori_filename, 1))
+        
+        updateSelectInput(session, "select_file",
+                          choices = ori_filename,
+                          selected = head(ori_filename, 1))
+        
+        n_cb_raw <<- length(ori_filename)
+        ##initial the variables and UI for merging
+        df_batch_detail<<-data.frame(
+          
+          Use = shinyInput(checkboxInput, n_cb_raw, 'cb_raw_', value = TRUE, width='1px'),                            
+          File_name=ori_filename, Processed=rep(c(FALSE), times = length(ori_filename)),
+          Robust_Z_Low_Limit=NA,
+          Robust_Z_Upper_Limit= NA,
+          Threshold_Applied = NA,
+          Threshold_Area_Min =NA,
+          Threshold_Area_Max =NA,
+          Threshold_Diameter_Min =NA,
+          Threshold_Diameter_Max =NA,
+          Threshold_Volume_Min =NA,
+          Threshold_Volume_Max =NA,
+          Threshold_Perimeter_Min =NA,
+          Threshold_Perimeter_Max =NA,
+          Threshold_Circularity_Min =NA,
+          Threshold_Circularity_Max =NA
+        )
+        
+        df_output_list <<- vector("list", length = length(ori_filename))
+        df_origin_list <<- vector("list", length = length(ori_filename))
+        df_spheroid_list <<- vector("list", length = length(ori_filename))
+        
+        ## update file list in merge tab
+        
+        #Display table with checkbox buttons
+        
+        # output$merge_file <- 
+        #   DT::renderDataTable({
+        #     DT::datatable(
+        #       cbind(cb_raw = shinyInput(checkboxInput, n_cb_raw, 'cb_raw_', value = TRUE, width='1px'),
+        #             df_batch_detail),
+        #       # df_batch_detail,
+        #       options = list(scrollX = TRUE))})
+        ##
+        
+        # Init the table for merging
+        output$merge_file <-
+          DT::renderDataTable({
+            DT::datatable(
+              df_batch_detail,
+              # df_batch_detail,
+              escape = FALSE, selection = 'none',
+              options = list(
+                pageLength = 5,
+                scrollY = TRUE,
+                scrollX = TRUE,
+                preDrawCallback = JS('function() { Shiny.unbindAll(this.api().table().node()); }'),
+                drawCallback = JS('function() { Shiny.bindAll(this.api().table().node()); } ')
+              )
+            )
+          })
+        
       }
+      ""
+      
     })
+    
+    # observeEvent(input$raw_data, {
+    #   
+    #   file <- input$raw_data
+    #   
+    #   ## validate the file path is correct
+    #   if(!is.null(file)){
+    #     for (datapath in file$datapath){
+    #       
+    #       ext <- tools::file_ext(datapath)
+    #       print(datapath)
+    #       print(ext)
+    #       req(file)
+    #       validate(need(ext == "xlsx","Please upload an xlsx file"))
+    #     }
+    #     
+    #   ## validate the file is correct  
+    #     for (datapath in file$datapath){
+    # 
+    #       df_raw_check <- readxl::read_xlsx(datapath)
+    # 
+    #       error_list = check_raw(df_raw_check)
+    #       
+    #       if(all(error_list)==FALSE){
+    #         raw_file_error<<-TRUE
+    #       }else{
+    #         raw_file_error<<-FALSE
+    #       }
+    #       
+    #       validate(
+    #                need(error_list[1] == TRUE,"Column names error\nplease refer to the raw file template"),
+    #                need(error_list[2] == TRUE,"Value error\nCheck values in the raw file"))
+    # 
+    #     }
+    #     
+    # 
+    #   
+    #   # get the original file names
+    #   ori_filename = input$raw_data$name
+    #   
+    #   # Create selections for raw files in both input and outlier removal panels.
+    #   updateSelectInput(session, "select_file_preview",
+    #                     choices = ori_filename,
+    #                     selected = head(ori_filename, 1))
+    #   
+    #   updateSelectInput(session, "select_file",
+    #                     choices = ori_filename,
+    #                     selected = head(ori_filename, 1))
+    #   
+    #   n_cb_raw <<- length(ori_filename)
+    #   ##initial the variables and UI for merging
+    #   df_batch_detail<<-data.frame(
+    #     
+    #     Use = shinyInput(checkboxInput, n_cb_raw, 'cb_raw_', value = TRUE, width='1px'),                            
+    #     File_name=ori_filename, Processed=rep(c(FALSE), times = length(ori_filename)),
+    #                                Robust_Z_Low_Limit=NA,
+    #                                Robust_Z_Upper_Limit= NA,
+    #                                Threshold_Applied = NA,
+    #                                Threshold_Area_Min =NA,
+    #                                Threshold_Area_Max =NA,
+    #                                Threshold_Diameter_Min =NA,
+    #                                Threshold_Diameter_Max =NA,
+    #                                Threshold_Volume_Min =NA,
+    #                                Threshold_Volume_Max =NA,
+    #                                Threshold_Perimeter_Min =NA,
+    #                                Threshold_Perimeter_Max =NA,
+    #                                Threshold_Circularity_Min =NA,
+    #                                Threshold_Circularity_Max =NA
+    #                                )
+    #   
+    #   df_output_list <<- vector("list", length = length(ori_filename))
+    #   df_origin_list <<- vector("list", length = length(ori_filename))
+    #   df_spheroid_list <<- vector("list", length = length(ori_filename))
+    #   
+    #   ## update file list in merge tab
+    #   
+    #   #Display table with checkbox buttons
+    #   
+    #   # output$merge_file <- 
+    #   #   DT::renderDataTable({
+    #   #     DT::datatable(
+    #   #       cbind(cb_raw = shinyInput(checkboxInput, n_cb_raw, 'cb_raw_', value = TRUE, width='1px'),
+    #   #             df_batch_detail),
+    #   #       # df_batch_detail,
+    #   #       options = list(scrollX = TRUE))})
+    #   ##
+    # 
+    #   # Init the table for merging
+    #   output$merge_file <-
+    #     DT::renderDataTable({
+    #       DT::datatable(
+    #         df_batch_detail,
+    #         # df_batch_detail,
+    #         escape = FALSE, selection = 'none',
+    #         options = list(
+    #           pageLength = 5,
+    #           scrollY = TRUE,
+    #           scrollX = TRUE,
+    #           preDrawCallback = JS('function() { Shiny.unbindAll(this.api().table().node()); }'),
+    #           drawCallback = JS('function() { Shiny.bindAll(this.api().table().node()); } ')
+    #         )
+    #       )
+    #     })
+    # 
+    #   }
+    # })
     
 
     
@@ -473,11 +619,13 @@ server <- function(input, output,session) {
         
         file <- input$raw_data
         name_id = which(file$name == input$select_file_preview)
-        print(input$select_file_preview)
-        print(file$datapath[name_id])
+        # print(input$select_file_preview)
+        # print(file$datapath[name_id])
         if(!is.null(file)){
           ext <- tools::file_ext(file$datapath[name_id])
           req(file)
+          print(file$datapath[name_id])
+          print(ext)
           validate(need(ext == "xlsx","Please upload an xlsx file"))
           data <- readxl::read_xlsx(file$datapath[name_id])
           DT::datatable(
@@ -574,7 +722,7 @@ server <- function(input, output,session) {
           treat_file_error<<-FALSE
         }
         
-        validate(need(error_list[1] == TRUE,"Dimension error\nCheck if the file is 6x8 (row names and column names excluded)"),
+        validate(need(error_list[1] == TRUE,"Dimension error\nCheck if the file has 6 rows and at least 8 columns"),
                  need(error_list[2] == TRUE,"Column names error\nplease refer to the template"),
                  need(error_list[3] == TRUE,"Row names error\nplease refer to the template"),
                  need(error_list[4] == TRUE,"Value error\nCheck values in the treatment file"))
@@ -667,7 +815,8 @@ server <- function(input, output,session) {
         need(input$treat_data, "please upload the treatment file"),
         
         need(treat_file_error==FALSE, "Treatment file has errors"),
-        need(layout_file_error==FALSE, "Layout file has errors")
+        need(layout_file_error==FALSE, "Layout file has errors"),
+        need(raw_file_error == FALSE, "Raw file has errors")
       )
       
 
@@ -785,10 +934,10 @@ server <- function(input, output,session) {
       # }
       
       
-      
+      # deprecated not used in the 
       # extract job information 
-      Job_Info_data <- select(Spheroid_data, Project.Folder, Project.ID,	Project.Name,	Jobdef.ID, Jobdef.Name, Jobrun.Finish.Time, 
-                              Jobrun.Folder, Jobrun.ID, Jobrun.Name, Jobrun.UUID)
+      # Job_Info_data <- select(Spheroid_data, Project.Folder, Project.ID,	Project.Name,	Jobdef.ID, Jobdef.Name, Jobrun.Finish.Time, 
+      #                         Jobrun.Folder, Jobrun.ID, Jobrun.Name, Jobrun.UUID)
       #Job_Info_data <- Job_Info_data[1:1,]
       
       
@@ -1017,16 +1166,16 @@ server <- function(input, output,session) {
       #             p_Volume_new,p_Volume_dotplot_new,
       #             p_Perimeter_new,p_Perimeter_dotplot_new)
       
-      check_empty_cells_1 = which(Spheroid_data[,c("Spheroid_Area.TD.Area","Spheroid_Area.TD.FillArea.Mean","Spheroid_Area.TD.Perimeter.Mean" ,    
+      check_empty_cells_1 = which(Spheroid_data[,c("Spheroid_Area.TD.Area","Spheroid_Area.TD.Perimeter.Mean" ,    
                                       "Spheroid_Area.TD.Circularity.Mean","Spheroid_Area.TD.Count","Spheroid_Area.TD.EqDiameter.Mean" ,   
-                                      "Spheroid_Area.TD.VolumeEqSphere.Mean" ,"Spheroid_Area.TD.Roughness.Mean","Spheroid_Area.TD.ShapeFactor.Mean" )] ==0 
+                                      "Spheroid_Area.TD.VolumeEqSphere.Mean" )] ==0 
                      , arr.ind=TRUE)
       
       
       
-      check_empty_cells_2 = which(is.na(Spheroid_data[,c("Spheroid_Area.TD.Area","Spheroid_Area.TD.FillArea.Mean","Spheroid_Area.TD.Perimeter.Mean" ,    
+      check_empty_cells_2 = which(is.na(Spheroid_data[,c("Spheroid_Area.TD.Area","Spheroid_Area.TD.Perimeter.Mean" ,    
                                              "Spheroid_Area.TD.Circularity.Mean","Spheroid_Area.TD.Count","Spheroid_Area.TD.EqDiameter.Mean" ,   
-                                             "Spheroid_Area.TD.VolumeEqSphere.Mean" ,"Spheroid_Area.TD.Roughness.Mean","Spheroid_Area.TD.ShapeFactor.Mean" )]), arr.ind=TRUE)
+                                             "Spheroid_Area.TD.VolumeEqSphere.Mean" )]), arr.ind=TRUE)
       
       
       check_empty_cells = rbind(check_empty_cells_1, check_empty_cells_2)
@@ -1311,6 +1460,19 @@ server <- function(input, output,session) {
       }
     )
     
+    output$downloadRawTemplate_2_btn <- downloadHandler(
+      
+      filename = function() {
+        paste( "template_raw_data_2.xlsx", sep = "")
+      },
+      content = function(file) {
+        
+        df_temp = read_excel("template_raw_data_2.xlsx", "JobView",col_names=TRUE, .name_repair = "universal")
+        write.xlsx(df_temp,file ,sheetName = "JobView" )
+        
+      }
+    )
+    
     
     output$downloadLayoutTemplate_btn <- downloadHandler(
       
@@ -1480,47 +1642,78 @@ server <- function(input, output,session) {
       
       freezePane(wb_mergedata, sheet = 1,  firstActiveRow = 2)
       
-      ## add the plot part
-      if(length(l_merge_plts)>0){
-        addWorksheet(wb_mergedata , "plots", gridLines = FALSE)
-        for(i_plt in 1:length(l_merge_plts)){
-          
-          png(paste0(i_plt,".png"),width = 1024, height = 400, res=150)
-          print(length(l_merge_plts)) 
-          print(l_merge_plts[[i_plt]]) 
-          dev.off()
-          insertImage(wb_mergedata, 2, paste0(i_plt,".png"), width = 9, height = 3.5 , startRow = (i_plt-1)*20+1,startCol = 'A')
-          
-          # file.remove(paste0(i_plt,".png"))
-          
-        }
+      #### deprecated, saving plots in another excel table
+      # ## add the plot part
+      # if(length(l_merge_plts)>0){
+      #   addWorksheet(wb_mergedata , "plots", gridLines = FALSE)
+      #   for(i_plt in 1:length(l_merge_plts)){
+      #     
+      #     png(paste0(i_plt,".png"),width = 1024, height = 400, res=150)
+      #     print(length(l_merge_plts)) 
+      #     print(l_merge_plts[[i_plt]]) 
+      #     dev.off()
+      #     insertImage(wb_mergedata, 2, paste0(i_plt,".png"), width = 9, height = 3.5 , startRow = (i_plt-1)*20+1,startCol = 'A')
+      #     
+      #     # file.remove(paste0(i_plt,".png"))
+      #     
+      #   }
+      # }
+      
+
+      if(dim(df_prev_report_detail)[1]!=0){
+        df_prev_report_detail$is_previous_report = TRUE
+      }
+      
+      if(dim(df_batch_detail)[1]!=0){
+        df_batch_detail$is_previous_report = FALSE
       }
 
       
       
-            
-      df_prev_report_detail$is_previous_report = TRUE
-      df_batch_detail$is_previous_report = FALSE
-      
       df_config = rbind.fill(df_batch_detail,  df_prev_report_detail)
       df_config$Use=NULL
+
       addWorksheet(wb_mergedata , "Merge Config", gridLines = FALSE)
+      # 
+      writeDataTable(wb_mergedata, 2, df_config, startRow = 1, startCol = 1,
+                     tableStyle = "TableStyleLight8",  rowNames = FALSE, keepNA = FALSE)
       
-      if(length(l_merge_plts)>0){
-        writeDataTable(wb_mergedata, 3, df_config, startRow = 1, startCol = 1, tableStyle = "TableStyleLight8",  rowNames = FALSE, keepNA = FALSE)
-      }else{
-        writeDataTable(wb_mergedata, 2, df_config, startRow = 1, startCol = 1, tableStyle = "TableStyleLight8",  rowNames = FALSE, keepNA = FALSE)
-      }
+      
+      
+      #### deprecated, saving plots in another excel table
+      
+      # if(length(l_merge_plts)>0){
+      #   writeDataTable(wb_mergedata, 3, df_config, startRow = 1, startCol = 1, tableStyle = "TableStyleLight8",  rowNames = FALSE, keepNA = FALSE)
+      # }else{
+      #   writeDataTable(wb_mergedata, 2, df_config, startRow = 1, startCol = 1, tableStyle = "TableStyleLight8",  rowNames = FALSE, keepNA = FALSE)
+      # }
       
       
       #  Save outlier analysis report , 
       return(wb_mergedata)
       
+    }
+
+    
+    ## return an excel table with added plots.
+    ## previous report can also be added in merging if provided
+    ## it is possible to select which files to merge
+    plot_results = function(){
+      wb_mergedata <- createWorkbook()
+      addWorksheet(wb_mergedata , "plots", gridLines = FALSE)
+      for(i_plt in 1:length(l_merge_plts)){
+        
+        png(paste0(i_plt,".png"),width = 1024, height = 400, res=150)
+        print(length(l_merge_plts)) 
+        print(l_merge_plts[[i_plt]]) 
+        dev.off()
+        insertImage(wb_mergedata, 1, paste0(i_plt,".png"), width = 9, height = 3.5 , startRow = (i_plt-1)*20+1,startCol = 'A')
+      }
+      
+      return(wb_mergedata)
       
     }
     
-    
-    df_test=data.frame(a=c(1,2,3,4),b=c(5,6,7,8))
     
     l_merge_plts = list()
     merge_plt=NA
@@ -1682,7 +1875,7 @@ server <- function(input, output,session) {
               )
       
       return(p)
-      # ggplot(df_test)+geom_point( aes(x=a,y=b))
+
     })
     
     
@@ -1693,6 +1886,8 @@ server <- function(input, output,session) {
     add_merge_plot <- eventReactive(input$add_m_plt_btn,{
       validate(need(!is.na(merge_plt),"Please make a plot before adding"))
       l_merge_plts[[length(l_merge_plts)+1]] <<- merge_plt
+      
+      shinyjs::enable("downloadPlots_btn")
       
       "Plot added"
       
@@ -1821,6 +2016,23 @@ server <- function(input, output,session) {
       }
     )
     
+    ## Download the report of plots 
+    ## event after clicking the download the report of plots button
+    output$downloadPlots_btn <- downloadHandler(
+      filename = function() {
+        paste(input$plotsName_text, sep = "")
+      },
+      content = function(file) {
+        
+        saveWorkbook(plot_results(), file, overwrite = TRUE)
+        # write.csv(df_temp,file)
+        # saveWorkbook(global_wb, file, overwrite = TRUE)
+        
+      }
+    )
+    
+    
+    ## Deprecated
     ## Download the config file
     ## event after clicking the download config file button
     

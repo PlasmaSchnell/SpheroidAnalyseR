@@ -42,20 +42,61 @@ check_layout = function(df){
 # Check the treatment file
 # Used in reading the treatment file
 check_treatment = function(df){
-  dim_check = all(dim(df) == c(6,8))
-  colnames_check = colnames_check = tryCatch( all(colnames(df) == c("Index", "Treatment.Label",
+  # dim_check = all(dim(df) == c(6,8))
+
+  dim_check = (dim(df)[1]==6 & dim(df)[2]>=8)
+  # colnames_check = colnames_check = tryCatch( all(colnames(df) == c("Index", "Treatment.Label",
+  #                                                                   "Time_of_treatment", "Cell_line",
+  #                                                                   "Passage_No", "Radiation_dosage",
+  #                                                                   "Drug_1", "Conc_1"))
+  #                                             , error = function(e){F})
+  
+  
+  colnames_check = tryCatch( all(c("Index", "Treatment.Label",
                                                                     "Time_of_treatment", "Cell_line",
                                                                     "Passage_No", "Radiation_dosage",
-                                                                    "Drug_1", "Conc_1"))
+                                                                    "Drug_1", "Conc_1") %in% colnames(df))
                                               , error = function(e){F})
+  
   
   rownames_check = tryCatch(all(row.names(df) ==as.character(1:6)), error = function(e){F})
   
-  type_check = tryCatch(all(sapply(df, typeof) == c("integer","character","character","character","integer","integer","character","integer")),
-                        error = function(e){F})
+  type_check = TRUE
+  # type_check = tryCatch(all(sapply(df, typeof) == c("integer","character","character","character","integer","integer","character","integer")),
+  #                       error = function(e){F})
   
   
   error_list = c(dim_check, colnames_check, rownames_check,type_check)
+  return(error_list)
+}
+
+
+
+# Check the raw file
+# Used in reading the treatment file
+check_raw = function(df){
+  # dim_check = all(dim(df) == c(6,8))
+  
+
+
+  
+  
+  colnames_check = tryCatch( all(c("Jobrun Finish Time", "Well Name",
+                                                    "Spheroid_Area.TD.Area", "Spheroid_Area.TD.Perimeter.Mean",
+                                                    "Spheroid_Area.TD.Circularity.Mean", "Spheroid_Area.TD.Count",
+                                                    "Spheroid_Area.TD.EqDiameter.Mean",
+                                                    "Spheroid_Area.TD.VolumeEqSphere.Mean") %in% colnames(df))
+                                              , error = function(e){F})
+  
+  
+  # rownames_check = tryCatch(all(row.names(df) ==as.character(1:6)), error = function(e){F})
+  
+  type_check = TRUE
+  # type_check = tryCatch(all(sapply(df, typeof) == c("integer","character","character","character","integer","integer","character","integer")),
+  #                       error = function(e){F})
+  
+  
+  error_list = c(colnames_check,type_check)
   return(error_list)
 }
 

@@ -1,7 +1,7 @@
-Index,Treatment.Label,Time_of_treatment,Cell_line,Passage_No,Radiation_dosage,Drug_1,Conc_1
-1,Treatment_A,01/31/2020 10:28,GBM58,1,0,Taurine,0
-2,Treatment_A,01/31/2020 10:28,GBM58,1,0,Taurine,10
-3,Treatment_B,01/31/2020 10:28,GBM63,1,0,Taurine,0
-4,Treatment_B,01/31/2020 10:28,GBM63,1,0,Taurine,10
-5,Treatment_B,01/31/2020 10:28,A172,1,0,Taurine,0
-6,Treatment_B,01/31/2020 10:28,A172,1,0,Taurine,10
+Index,Treatment.Label,Time_of_treatment,Cell_line,Passage_No,Radiation_dosage,Drug_1,Drug_2,Drug_n,Conc_1,Conc_2,Conc_n
+1,Treatment_A,01/31/2020 10:28,GBM58,1,0,Taurine,<Add_drug_cols_if_necessary>,<Add_drug_cols_if_necessary>,0,<Add_concentration_cols_if_necessary>,<Add_concentration_cols_if_necessary>
+2,Treatment_A,01/31/2020 10:28,GBM58,1,0,Taurine,<Add_drug_cols_if_necessary>,<Add_drug_cols_if_necessary>,10,<Add_concentration_cols_if_necessary>,<Add_concentration_cols_if_necessary>
+3,Treatment_B,01/31/2020 10:28,GBM63,1,0,Taurine,<Add_drug_cols_if_necessary>,<Add_drug_cols_if_necessary>,0,<Add_concentration_cols_if_necessary>,<Add_concentration_cols_if_necessary>
+4,Treatment_B,01/31/2020 10:28,GBM63,1,0,Taurine,<Add_drug_cols_if_necessary>,<Add_drug_cols_if_necessary>,10,<Add_concentration_cols_if_necessary>,<Add_concentration_cols_if_necessary>
+5,Treatment_B,01/31/2020 10:28,A172,1,0,Taurine,<Add_drug_cols_if_necessary>,<Add_drug_cols_if_necessary>,0,<Add_concentration_cols_if_necessary>,<Add_concentration_cols_if_necessary>
+6,Treatment_B,01/31/2020 10:28,A172,1,0,Taurine,<Add_drug_cols_if_necessary>,<Add_drug_cols_if_necessary>,10,<Add_concentration_cols_if_necessary>,<Add_concentration_cols_if_necessary>
