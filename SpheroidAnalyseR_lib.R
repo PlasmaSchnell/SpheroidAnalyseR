@@ -81,13 +81,14 @@ check_raw = function(df){
 
   
   
-  colnames_check = tryCatch( all(c("Jobrun Finish Time", "Well Name",
+  colnames_check = tryCatch( all(c("Jobrun.Finish.Time", "Well.Name",
                                                     "Spheroid_Area.TD.Area", "Spheroid_Area.TD.Perimeter.Mean",
                                                     "Spheroid_Area.TD.Circularity.Mean", "Spheroid_Area.TD.Count",
                                                     "Spheroid_Area.TD.EqDiameter.Mean",
                                                     "Spheroid_Area.TD.VolumeEqSphere.Mean") %in% colnames(df))
                                               , error = function(e){F})
   
+
   
   # rownames_check = tryCatch(all(row.names(df) ==as.character(1:6)), error = function(e){F})
   

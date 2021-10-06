@@ -412,8 +412,9 @@ server <- function(input, output,session) {
           )
           
           
-          df_raw_check <- readxl::read_xlsx(row$datapath)
-          
+          # df_raw_check <- readxl::read_xlsx(row$datapath)
+          df_raw_check <- read_excel(row$datapath, "JobView",col_names=TRUE, .name_repair = "universal") 
+          print(colnames(df_raw_check))
           error_list = check_raw(df_raw_check)
           
           if(all(error_list)==FALSE){
@@ -1455,6 +1456,7 @@ server <- function(input, output,session) {
       content = function(file) {
         
         df_temp = read_excel("template_raw_data.xlsx", "JobView",col_names=TRUE, .name_repair = "universal")
+        print(colnames(df_temp))
         write.xlsx(df_temp,file ,sheetName = "JobView" )
         
       }
